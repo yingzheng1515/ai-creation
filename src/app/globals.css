@@ -376,6 +376,45 @@ p {
   font-size: 14px;
 }
 
+.pipeline-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 18px;
+  border: 1px solid var(--ink-100);
+  border-radius: 10px;
+  background: var(--rice-dark);
+}
+
+.pipeline-field {
+  display: grid;
+  gap: 8px;
+  color: var(--ink-800);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pipeline-field textarea {
+  min-height: 104px;
+  background: #ffffff;
+}
+
+.pipeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pipeline-status {
+  color: var(--ink-500);
+  font-size: 14px;
+}
+
+.error-text {
+  color: var(--cinnabar);
+  font-weight: 700;
+}
+
 .workspace {
   overflow: hidden;
   border: 1px solid var(--ink-100);

@@ -1,20 +1,84 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getHistory } from "@/lib/history";
-import type { HistoryEntry } from "@/types/generation";
+import { addHistoryEntry, getHistory } from "@/lib/history";
+import type { GenerationResult, HistoryEntry, ImageResult, ScriptResult, VideoResult } from "@/types/generation";
 import { ToolTabs } from "./ToolTabs";
 import { WorkflowScenes } from "./WorkflowScenes";
+
+type PipelineStatus = "idle" | "script" | "image" | "video" | "done" | "error";
+
+async function postGeneration<T extends GenerationResult>(url: string, body: Record<string, string>): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "生成失败。");
+  }
+
+  return payload;
+}
 
 export function WorkflowShell() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [pipelinePrompt, setPipelinePrompt] = useState("");
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>("idle");
+  const [pipelineError, setPipelineError] = useState("");
 
   useEffect(() => {
     setEntries(getHistory());
   }, [historyVersion]);
 
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
+
+  async function runPipeline() {
+    const prompt = pipelinePrompt.trim();
+    if (!prompt) {
+      setPipelineStatus("error");
+      setPipelineError("请输入核心创意。");
+      return;
+    }
+
+    setPipelineError("");
+
+    try {
+      setPipelineStatus("script");
+      const script = await postGeneration<ScriptResult>("/api/generate/script", { requirement: prompt });
+      addHistoryEntry({ type: "script", input: prompt, result: script });
+      refreshWorkflow();
+
+      setPipelineStatus("image");
+      const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: script.content });
+      addHistoryEntry({ type: "image", input: script.content, result: image });
+      refreshWorkflow();
+
+      setPipelineStatus("video");
+      const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: script.content });
+      addHistoryEntry({ type: "video", input: script.content, result: video });
+      refreshWorkflow();
+
+      setPipelineStatus("done");
+    } catch (caught) {
+      setPipelineStatus("error");
+      setPipelineError(caught instanceof Error ? caught.message : "全链路生成失败。");
+    }
+  }
+
+  const isPipelineRunning = pipelineStatus === "script" || pipelineStatus === "image" || pipelineStatus === "video";
+
+  const pipelineStatusText: Record<PipelineStatus, string> = {
+    idle: "等待输入核心创意",
+    script: "正在衍化剧本",
+    image: "正在生成画面",
+    video: "正在合成视频",
+    done: "全链路完成",
+    error: pipelineError || "全链路生成失败",
+  };
 
   return (
     <div className="app-frame">
@@ -81,7 +145,26 @@ export function WorkflowShell() {
             <div className="gold-rule" />
             <div className="prompt-copy">
               <h2>初始灵感 Prompt</h2>
-              <p>输入核心创意，系统先用 mock 能力跑通剧本、图片和视频三个生成入口。</p>
+              <p>输入核心创意，系统会依次生成剧本、画面和视频，并同步到下方场景流。</p>
+            </div>
+            <div className="pipeline-panel">
+              <label className="pipeline-field">
+                <span>核心创意</span>
+                <textarea
+                  value={pipelinePrompt}
+                  onChange={(event) => setPipelinePrompt(event.target.value)}
+                  placeholder="例如：一段关于江南水乡的宣传片，水墨画质感，电影级景深，节奏舒缓..."
+                  rows={4}
+                />
+              </label>
+              <div className="pipeline-actions">
+                <button className="gold-button" type="button" onClick={runPipeline} disabled={isPipelineRunning}>
+                  {isPipelineRunning ? "衍化中..." : "一键衍化全链路"}
+                </button>
+                <span className={pipelineStatus === "error" ? "pipeline-status error-text" : "pipeline-status"}>
+                  {pipelineStatusText[pipelineStatus]}
+                </span>
+              </div>
             </div>
             <ToolTabs onHistoryChange={refreshWorkflow} />
           </section>
@@ -90,10 +173,12 @@ export function WorkflowShell() {
         </div>
 
         <footer className="bottom-bar">
-          <span>当前工作流节点：{entries.length > 0 ? Math.min(entries.length, 3) : 0}/3。生成结果会同步到场景流。</span>
+          <span>当前工作流节点：{entries.length > 0 ? Math.min(entries.length, 3) : 0}/3。{pipelineStatusText[pipelineStatus]}。</span>
           <div>
             <button className="ghost-button" type="button">中止衍化</button>
-            <button className="gold-button" type="button">批量一键生成</button>
+            <button className="gold-button" type="button" onClick={runPipeline} disabled={isPipelineRunning}>
+              批量一键生成
+            </button>
           </div>
         </footer>
       </main>
