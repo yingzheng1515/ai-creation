@@ -253,6 +253,49 @@ p {
   font-size: 13px;
 }
 
+.account-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.account-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.account-form input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--ink-100);
+  border-radius: 6px;
+  padding: 0 10px;
+  outline: none;
+  background: var(--rice-dark);
+  color: var(--ink-800);
+  font-size: 13px;
+}
+
+.account-form input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.account-action {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.auth-error {
+  margin: 0;
+  color: var(--cinnabar);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .main-stage {
   position: relative;
   display: flex;
@@ -1196,9 +1239,35 @@ textarea:focus {
     white-space: nowrap;
   }
 
-  .side-icon,
-  .usage-card {
+  .side-icon {
     display: none;
+  }
+
+  .usage-card {
+    display: grid;
+    gap: 10px;
+    padding: 10px 14px 12px;
+  }
+
+  .usage-toggle,
+  .usage-track {
+    display: none;
+  }
+
+  .user-chip {
+    margin-top: 0;
+  }
+
+  .account-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: end;
+    margin-top: 0;
+  }
+
+  .account-action,
+  .auth-error {
+    grid-column: 1 / -1;
+    margin-top: 0;
   }
 
   .main-stage {

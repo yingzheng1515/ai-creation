@@ -63,6 +63,9 @@ SEEDANCE_API_URL=你的_seedance_创建任务地址
 SEEDANCE_STATUS_API_URL=你的_seedance_查询任务地址_包含_{taskId}
 SEEDANCE_MODEL=seedance-2.0
 
+# 必填：用于签名登录 Cookie。请换成一串 32 位以上随机字符串。
+SESSION_SECRET=换成_32位以上_随机字符串
+
 # 可选：服务器历史记录根目录。默认是项目目录下的 data/。
 HISTORY_DATA_DIR=/var/www/ai-creation/data
 
@@ -74,6 +77,8 @@ SESSION_COOKIE_SECURE=false
 不要把 `.env.local` 提交到 Git。
 
 `HISTORY_DATA_DIR` 用来保存“我的作品 / 素材宝库 / 历史”里的最近生成记录。MVP 阶段它会按浏览器访客会话写入 `data/users/<访客ID>/history.json`，不同访客不会共享同一份作品库。清浏览器 Cookie 或换新浏览器会生成新的访客空间。
+
+账号名 + 访问码登录会写入 `data/auth/accounts.json`。访问码不会明文保存，会使用 Node.js `scrypt` 加盐哈希。`SESSION_SECRET` 改变后，已经登录的浏览器需要重新登录。
 
 ## 4. 安装依赖并构建
 

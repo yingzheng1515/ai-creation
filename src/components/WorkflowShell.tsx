@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { addHistoryEntry, getHistory } from "@/lib/history";
-import { getSession } from "@/lib/session-client";
+import { getSession, login, logout } from "@/lib/session-client";
+import type { ClientSession } from "@/lib/session-client";
 import type {
   GenerationResult,
   HistoryEntry,
@@ -75,7 +77,11 @@ async function postGeneration<T extends GenerationResult>(url: string, body: Rec
 export function WorkflowShell() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [sessionLabel, setSessionLabel] = useState("访客空间");
+  const [session, setSession] = useState<ClientSession>({ id: "unknown", label: "访客空间", isAuthenticated: false });
+  const [accountName, setAccountName] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>("studio");
   const [isTokenDetailsOpen, setIsTokenDetailsOpen] = useState(false);
   const [pipelinePrompt, setPipelinePrompt] = useState("");
@@ -99,9 +105,9 @@ export function WorkflowShell() {
   useEffect(() => {
     let isCurrent = true;
 
-    getSession().then((session) => {
+    getSession().then((loadedSession) => {
       if (isCurrent) {
-        setSessionLabel(session.label);
+        setSession(loadedSession);
       }
     });
 
@@ -111,6 +117,40 @@ export function WorkflowShell() {
   }, []);
 
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    setIsAuthBusy(true);
+
+    try {
+      const nextSession = await login(accountName, accessCode);
+      setSession(nextSession);
+      setAccessCode("");
+      refreshWorkflow();
+    } catch (caught) {
+      setAuthError(caught instanceof Error ? caught.message : "登录失败。");
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
+
+  async function handleLogout() {
+    setAuthError("");
+    setIsAuthBusy(true);
+
+    try {
+      const nextSession = await logout();
+      setSession(nextSession);
+      setAccountName("");
+      setAccessCode("");
+      refreshWorkflow();
+    } catch (caught) {
+      setAuthError(caught instanceof Error ? caught.message : "退出失败。");
+    } finally {
+      setIsAuthBusy(false);
+    }
+  }
 
   async function runPipeline() {
     const prompt = pipelinePrompt.trim();
@@ -338,8 +378,39 @@ export function WorkflowShell() {
           </div>
           <div className="user-chip">
             <span className="avatar-mark">人</span>
-            <span>{sessionLabel}</span>
+            <span>{session.label}</span>
           </div>
+          {session.isAuthenticated ? (
+            <button className="secondary-button account-action" type="button" onClick={handleLogout} disabled={isAuthBusy}>
+              退出登录
+            </button>
+          ) : (
+            <form className="account-form" onSubmit={handleLogin}>
+              <label>
+                <span>账号名</span>
+                <input
+                  value={accountName}
+                  onChange={(event) => setAccountName(event.target.value)}
+                  placeholder="例如 Creator"
+                  autoComplete="username"
+                />
+              </label>
+              <label>
+                <span>访问码</span>
+                <input
+                  value={accessCode}
+                  onChange={(event) => setAccessCode(event.target.value)}
+                  placeholder="至少 6 位"
+                  type="password"
+                  autoComplete="current-password"
+                />
+              </label>
+              {authError ? <p className="auth-error">{authError}</p> : null}
+              <button className="secondary-button account-action" type="submit" disabled={isAuthBusy}>
+                {isAuthBusy ? "处理中..." : "登录 / 创建账号"}
+              </button>
+            </form>
+          )}
         </div>
       </aside>
 

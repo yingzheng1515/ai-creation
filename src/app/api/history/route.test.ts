@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE, GET, POST } from "./route";
+import { createOrLoginAccount } from "@/lib/auth-store";
+import { createAccountSessionCookie } from "@/lib/session";
 import type { ScriptResult } from "@/types/generation";
 
 const scriptResult: ScriptResult = {
@@ -33,10 +35,12 @@ const deleteRequest = (cookie = "ai_creation_session=usr_default123") =>
 describe("history API route", () => {
   let tempDir = "";
   const originalHistoryFilePath = process.env.HISTORY_FILE_PATH;
+  const originalSessionSecret = process.env.SESSION_SECRET;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "ai-history-"));
     process.env.HISTORY_FILE_PATH = join(tempDir, "history.json");
+    process.env.SESSION_SECRET = "test-session-secret";
   });
 
   afterEach(async () => {
@@ -44,6 +48,12 @@ describe("history API route", () => {
       delete process.env.HISTORY_FILE_PATH;
     } else {
       process.env.HISTORY_FILE_PATH = originalHistoryFilePath;
+    }
+
+    if (originalSessionSecret === undefined) {
+      delete process.env.SESSION_SECRET;
+    } else {
+      process.env.SESSION_SECRET = originalSessionSecret;
     }
 
     await rm(tempDir, { recursive: true, force: true });
@@ -103,6 +113,34 @@ describe("history API route", () => {
     expect((await userTwoResponse.json()).entries).toEqual([
       expect.objectContaining({ input: "用户二" }),
     ]);
+  });
+
+  it("keeps account history separate from visitor history", async () => {
+    const account = await createOrLoginAccount("Creator", "account-code");
+    const accountCookie = createAccountSessionCookie(account.user.id, new Request("http://localhost/api/history"));
+
+    await POST(
+      jsonRequest(
+        {
+          type: "script",
+          input: "账号作品",
+          result: scriptResult,
+        },
+        accountCookie,
+      ),
+    );
+
+    const accountResponse = await GET(
+      new Request("http://localhost/api/history", {
+        headers: { cookie: accountCookie },
+      }),
+    );
+    const visitorResponse = await GET(getRequest("ai_creation_session=usr_visitor123"));
+
+    expect((await accountResponse.json()).entries).toEqual([
+      expect.objectContaining({ input: "账号作品" }),
+    ]);
+    expect((await visitorResponse.json()).entries).toEqual([]);
   });
 
   it("rejects malformed history entries", async () => {
