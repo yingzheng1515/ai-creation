@@ -129,4 +129,23 @@ describe("WorkflowShell", () => {
       expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜视频提示" }) }),
     );
   });
+
+  it("switches sidebar sections and explains token usage", async () => {
+    render(<WorkflowShell />);
+
+    await userEvent.click(screen.getByRole("button", { name: /我的作品/ }));
+    expect(screen.getByRole("heading", { name: "我的作品" })).toBeInTheDocument();
+    expect(screen.getByText("这里汇总当前浏览器保存的脚本、图片和视频。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /素材宝库/ }));
+    expect(screen.getByRole("heading", { name: "素材宝库" })).toBeInTheDocument();
+    expect(screen.getByText("图片和视频素材会在生成后自动沉淀到这里。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /剧本模板/ }));
+    expect(screen.getByRole("heading", { name: "剧本模板" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "使用 产品宣传片 模板" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /灵力 Token/ }));
+    expect(screen.getByText("Token 是生成脚本、图片和视频时预估消耗的额度。")).toBeInTheDocument();
+  });
 });

@@ -14,6 +14,29 @@ import { ToolTabs } from "./ToolTabs";
 import { WorkflowScenes } from "./WorkflowScenes";
 
 type PipelineStatus = "idle" | "script" | "image" | "video" | "done" | "error";
+type WorkspaceView = "studio" | "works" | "assets" | "templates";
+
+const navItems: Array<{ icon: string; label: string; view: WorkspaceView }> = [
+  { icon: "层", label: "创作台", view: "studio" },
+  { icon: "影", label: "我的作品", view: "works" },
+  { icon: "图", label: "素材宝库", view: "assets" },
+  { icon: "卷", label: "剧本模板", view: "templates" },
+];
+
+const scriptTemplates = [
+  {
+    name: "产品宣传片",
+    prompt: "为一款 AI 自动创作工具写 30 秒产品宣传片，突出自动写脚本、生图、生视频的完整工作流。",
+  },
+  {
+    name: "品牌故事",
+    prompt: "写一支品牌故事短片，风格克制高级，三镜头结构，开场有钩子，结尾有行动号召。",
+  },
+  {
+    name: "活动预热视频",
+    prompt: "写一支活动预热视频，节奏紧凑，包含场景氛围、核心亮点和报名引导。",
+  },
+];
 
 function scenesForPipeline(script: ScriptResult): ScriptScene[] {
   if (script.scenes && script.scenes.length > 0) {
@@ -51,6 +74,8 @@ async function postGeneration<T extends GenerationResult>(url: string, body: Rec
 export function WorkflowShell() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [activeView, setActiveView] = useState<WorkspaceView>("studio");
+  const [isTokenDetailsOpen, setIsTokenDetailsOpen] = useState(false);
   const [pipelinePrompt, setPipelinePrompt] = useState("");
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>("idle");
   const [pipelineError, setPipelineError] = useState("");
@@ -111,6 +136,129 @@ export function WorkflowShell() {
     error: pipelineError || "全链路生成失败",
   };
 
+  const imageAssets = entries.filter((entry) => entry.result.type === "image");
+  const videoAssets = entries.filter((entry) => entry.result.type === "video");
+
+  function useTemplate(prompt: string) {
+    setPipelinePrompt(prompt);
+    setActiveView("studio");
+  }
+
+  function renderWorkspaceView() {
+    if (activeView === "works") {
+      return (
+        <section className="library-panel" aria-labelledby="works-heading">
+          <div className="library-heading">
+            <p className="section-kicker">Works</p>
+            <h2 id="works-heading">我的作品</h2>
+            <p>这里汇总当前浏览器保存的脚本、图片和视频。</p>
+          </div>
+          {entries.length === 0 ? (
+            <div className="result-empty">还没有作品。先回到创作台生成一条内容。</div>
+          ) : (
+            <div className="library-list">
+              {entries.map((entry) => (
+                <article className="library-item" key={entry.id}>
+                  <strong>{entry.type === "script" ? "脚本" : entry.type === "image" ? "图片" : "视频"}</strong>
+                  <p>{entry.input}</p>
+                  <time>{new Date(entry.createdAt).toLocaleString("zh-CN")}</time>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (activeView === "assets") {
+      return (
+        <section className="library-panel" aria-labelledby="assets-heading">
+          <div className="library-heading">
+            <p className="section-kicker">Assets</p>
+            <h2 id="assets-heading">素材宝库</h2>
+            <p>图片和视频素材会在生成后自动沉淀到这里。</p>
+          </div>
+          {imageAssets.length + videoAssets.length === 0 ? (
+            <div className="result-empty">还没有素材。生成图片或视频后会显示在这里。</div>
+          ) : (
+            <div className="asset-grid">
+              {[...imageAssets, ...videoAssets].map((entry) => (
+                <article className="asset-card" key={entry.id}>
+                  {entry.result.type === "image" ? (
+                    <img src={entry.result.url} alt={entry.result.prompt} />
+                  ) : entry.result.type === "video" ? (
+                    <video src={entry.result.url} controls>
+                      <track kind="captions" />
+                    </video>
+                  ) : null}
+                  <strong>{entry.result.type === "image" ? "图片素材" : "视频素材"}</strong>
+                  <p>{entry.input}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (activeView === "templates") {
+      return (
+        <section className="library-panel" aria-labelledby="templates-heading">
+          <div className="library-heading">
+            <p className="section-kicker">Templates</p>
+            <h2 id="templates-heading">剧本模板</h2>
+            <p>选择一个模板后，会自动填入核心创意，你可以继续修改再生成。</p>
+          </div>
+          <div className="template-grid">
+            {scriptTemplates.map((template) => (
+              <article className="template-card" key={template.name}>
+                <h3>{template.name}</h3>
+                <p>{template.prompt}</p>
+                <button className="secondary-button" type="button" onClick={() => useTemplate(template.prompt)}>
+                  使用 {template.name} 模板
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <>
+        <section className="prompt-card">
+          <div className="gold-rule" />
+          <div className="prompt-copy">
+            <h2>初始灵感 Prompt</h2>
+            <p>输入核心创意，系统会依次生成剧本、画面和视频，并同步到下方场景流。</p>
+          </div>
+          <div className="pipeline-panel">
+            <label className="pipeline-field">
+              <span>核心创意</span>
+              <textarea
+                value={pipelinePrompt}
+                onChange={(event) => setPipelinePrompt(event.target.value)}
+                placeholder="例如：一段关于江南水乡的宣传片，水墨画质感，电影级景深，节奏舒缓..."
+                rows={4}
+              />
+            </label>
+            <div className="pipeline-actions">
+              <button className="gold-button" type="button" onClick={runPipeline} disabled={isPipelineRunning}>
+                {isPipelineRunning ? "衍化中..." : "一键衍化全链路"}
+              </button>
+              <span className={pipelineStatus === "error" ? "pipeline-status error-text" : "pipeline-status"}>
+                {pipelineStatusText[pipelineStatus]}
+              </span>
+            </div>
+          </div>
+          <ToolTabs onHistoryChange={refreshWorkflow} />
+        </section>
+
+        <WorkflowScenes entries={entries} />
+      </>
+    );
+  }
+
   return (
     <div className="app-frame">
       <aside className="sidebar" aria-label="主导航">
@@ -119,31 +267,47 @@ export function WorkflowShell() {
           <span>造物纪 AI</span>
         </div>
 
-        <nav className="side-nav">
-          <button className="side-link active" type="button">
-            <span className="side-icon">层</span>
-            创作台
-          </button>
-          <button className="side-link" type="button">
-            <span className="side-icon">影</span>
-            我的作品
-          </button>
-          <button className="side-link" type="button">
-            <span className="side-icon">图</span>
-            素材宝库
-          </button>
-          <button className="side-link" type="button">
-            <span className="side-icon">卷</span>
-            剧本模板
-          </button>
+        <nav className="side-nav" aria-label="工作区">
+          {navItems.map((item) => (
+            <button
+              className={activeView === item.view ? "side-link active" : "side-link"}
+              type="button"
+              aria-current={activeView === item.view ? "page" : undefined}
+              onClick={() => setActiveView(item.view)}
+              key={item.view}
+            >
+              <span className="side-icon">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="usage-card">
-          <div className="usage-row">
+          <button
+            className="usage-toggle"
+            type="button"
+            aria-expanded={isTokenDetailsOpen}
+            onClick={() => setIsTokenDetailsOpen((isOpen) => !isOpen)}
+          >
             <span>灵力 Token</span>
             <strong>8,240</strong>
-          </div>
-          <div className="usage-track">
+          </button>
+          {isTokenDetailsOpen ? (
+            <div className="usage-details">
+              <p>Token 是生成脚本、图片和视频时预估消耗的额度。</p>
+              <dl>
+                <div>
+                  <dt>已用</dt>
+                  <dd>45%</dd>
+                </div>
+                <div>
+                  <dt>剩余</dt>
+                  <dd>8,240</dd>
+                </div>
+              </dl>
+            </div>
+          ) : null}
+          <div className="usage-track" aria-label="Token 使用进度">
             <span />
           </div>
           <div className="user-chip">
@@ -171,37 +335,7 @@ export function WorkflowShell() {
           </div>
         </header>
 
-        <div className="stage-scroll">
-          <section className="prompt-card">
-            <div className="gold-rule" />
-            <div className="prompt-copy">
-              <h2>初始灵感 Prompt</h2>
-              <p>输入核心创意，系统会依次生成剧本、画面和视频，并同步到下方场景流。</p>
-            </div>
-            <div className="pipeline-panel">
-              <label className="pipeline-field">
-                <span>核心创意</span>
-                <textarea
-                  value={pipelinePrompt}
-                  onChange={(event) => setPipelinePrompt(event.target.value)}
-                  placeholder="例如：一段关于江南水乡的宣传片，水墨画质感，电影级景深，节奏舒缓..."
-                  rows={4}
-                />
-              </label>
-              <div className="pipeline-actions">
-                <button className="gold-button" type="button" onClick={runPipeline} disabled={isPipelineRunning}>
-                  {isPipelineRunning ? "衍化中..." : "一键衍化全链路"}
-                </button>
-                <span className={pipelineStatus === "error" ? "pipeline-status error-text" : "pipeline-status"}>
-                  {pipelineStatusText[pipelineStatus]}
-                </span>
-              </div>
-            </div>
-            <ToolTabs onHistoryChange={refreshWorkflow} />
-          </section>
-
-          <WorkflowScenes entries={entries} />
-        </div>
+        <div className="stage-scroll">{renderWorkspaceView()}</div>
 
         <footer className="bottom-bar">
           <span>当前工作流节点：{entries.length > 0 ? Math.min(entries.length, 3) : 0}/3。{pipelineStatusText[pipelineStatus]}。</span>
