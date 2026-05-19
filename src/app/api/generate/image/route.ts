@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { readJson, requireStringField } from "@/lib/api/validation";
-import { mockImageProvider } from "@/lib/providers/mock";
+import { getProviders } from "@/lib/providers";
 
 export async function POST(request: Request) {
   try {
     const body = await readJson(request);
     const prompt = requireStringField(body, "prompt");
-    const result = await mockImageProvider.generateImage({ prompt });
+    const result = await getProviders().image.generateImage({ prompt });
 
     return NextResponse.json(result);
   } catch (error) {

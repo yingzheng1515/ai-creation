@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { readJson, requireStringField } from "@/lib/api/validation";
-import { mockScriptProvider } from "@/lib/providers/mock";
+import { getProviders } from "@/lib/providers";
 
 export async function POST(request: Request) {
   try {
     const body = await readJson(request);
     const requirement = requireStringField(body, "requirement");
-    const result = await mockScriptProvider.generateScript({ requirement });
+    const result = await getProviders().script.generateScript({ requirement });
 
     return NextResponse.json(result);
   } catch (error) {

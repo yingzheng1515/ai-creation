@@ -1,6 +1,6 @@
 export type GenerationType = "script" | "image" | "video";
 
-export type ProviderName = "mock";
+export type ProviderName = "mock" | "external";
 
 export type ScriptScene = {
   id: string;
