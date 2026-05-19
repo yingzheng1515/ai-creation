@@ -148,4 +148,16 @@ describe("WorkflowShell", () => {
     await userEvent.click(screen.getByRole("button", { name: /灵力 Token/ }));
     expect(screen.getByText("Token 是生成脚本、图片和视频时预估消耗的额度。")).toBeInTheDocument();
   });
+
+  it("renders when cached history contains obsolete entries", () => {
+    window.localStorage.setItem(
+      "ai-creation-history:v1",
+      JSON.stringify([{ id: "obsolete", type: "image", input: "旧手机缓存" }]),
+    );
+
+    render(<WorkflowShell />);
+
+    expect(screen.getByRole("heading", { name: "初始灵感 Prompt" })).toBeInTheDocument();
+    expect(screen.getByText("等待脚本生成")).toBeInTheDocument();
+  });
 });

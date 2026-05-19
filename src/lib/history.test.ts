@@ -38,4 +38,32 @@ describe("local history", () => {
 
     expect(getHistory()).toEqual([]);
   });
+
+  it("ignores malformed cached entries", () => {
+    window.localStorage.setItem(
+      "ai-creation-history:v1",
+      JSON.stringify([
+        { id: "broken-entry", type: "image", input: "旧缓存" },
+        {
+          id: "valid-entry",
+          type: "script",
+          input: "有效缓存",
+          result,
+          provider: "mock",
+          createdAt: "2026-05-19T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    expect(getHistory()).toEqual([
+      {
+        id: "valid-entry",
+        type: "script",
+        input: "有效缓存",
+        result,
+        provider: "mock",
+        createdAt: "2026-05-19T00:00:00.000Z",
+      },
+    ]);
+  });
 });

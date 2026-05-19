@@ -8,6 +8,40 @@ type NewHistoryEntry = {
   result: GenerationResult;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isGenerationType(value: unknown): value is GenerationType {
+  return value === "script" || value === "image" || value === "video";
+}
+
+function isGenerationResult(value: unknown): value is GenerationResult {
+  if (!isRecord(value) || !isGenerationType(value.type) || typeof value.provider !== "string" || typeof value.createdAt !== "string") {
+    return false;
+  }
+
+  if (value.type === "script") {
+    return typeof value.content === "string";
+  }
+
+  return typeof value.url === "string" && typeof value.prompt === "string";
+}
+
+function isHistoryEntry(value: unknown): value is HistoryEntry {
+  if (!isRecord(value) || !isGenerationType(value.type) || !isGenerationResult(value.result)) {
+    return false;
+  }
+
+  return (
+    value.type === value.result.type &&
+    typeof value.id === "string" &&
+    typeof value.input === "string" &&
+    typeof value.provider === "string" &&
+    typeof value.createdAt === "string"
+  );
+}
+
 export function getHistory(): HistoryEntry[] {
   if (typeof window === "undefined") {
     return [];
@@ -20,7 +54,7 @@ export function getHistory(): HistoryEntry[] {
     }
 
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter(isHistoryEntry) : [];
   } catch {
     return [];
   }
