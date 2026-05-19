@@ -26,6 +26,26 @@ describe("WorkflowShell", () => {
         json: async () => ({
           type: "script",
           content: "镜头从江南水面推入。",
+          scenes: [
+            {
+              id: "scene-1",
+              title: "晨雾入画",
+              shot: "镜头从江南水面推入。",
+              narration: "江南醒来。",
+              imagePrompt: "第一镜图片提示",
+              videoPrompt: "第一镜视频提示",
+              durationSeconds: 4,
+            },
+            {
+              id: "scene-2",
+              title: "乌篷船过桥",
+              shot: "乌篷船穿过拱桥。",
+              narration: "水路把故事带向远方。",
+              imagePrompt: "第二镜图片提示",
+              videoPrompt: "第二镜视频提示",
+              durationSeconds: 5,
+            },
+          ],
           provider: "mock",
           createdAt: "2026-05-19T00:00:00.000Z",
         }),
@@ -34,8 +54,8 @@ describe("WorkflowShell", () => {
         ok: true,
         json: async () => ({
           type: "image",
-          url: "https://example.com/jiangnan.jpg",
-          prompt: "镜头从江南水面推入。",
+          url: "https://example.com/scene-1.jpg",
+          prompt: "第一镜图片提示",
           provider: "mock",
           createdAt: "2026-05-19T00:00:01.000Z",
         }),
@@ -43,11 +63,31 @@ describe("WorkflowShell", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          type: "video",
-          url: "https://example.com/jiangnan.mp4",
-          prompt: "镜头从江南水面推入。",
+          type: "image",
+          url: "https://example.com/scene-2.jpg",
+          prompt: "第二镜图片提示",
           provider: "mock",
           createdAt: "2026-05-19T00:00:02.000Z",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          type: "video",
+          url: "https://example.com/scene-1.mp4",
+          prompt: "第一镜视频提示",
+          provider: "mock",
+          createdAt: "2026-05-19T00:00:03.000Z",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          type: "video",
+          url: "https://example.com/scene-2.mp4",
+          prompt: "第二镜视频提示",
+          provider: "mock",
+          createdAt: "2026-05-19T00:00:04.000Z",
         }),
       });
     vi.stubGlobal("fetch", fetchMock);
@@ -59,8 +99,10 @@ describe("WorkflowShell", () => {
 
     expect(await screen.findByText("全链路完成")).toBeInTheDocument();
     expect(screen.getByText("镜头从江南水面推入。")).toBeInTheDocument();
-    expect(screen.getByAltText("镜头从江南水面推入。")).toHaveAttribute("src", "https://example.com/jiangnan.jpg");
-    expect(screen.getByTestId("workflow-video")).toHaveAttribute("src", "https://example.com/jiangnan.mp4");
+    expect(screen.getByText("乌篷船过桥")).toBeInTheDocument();
+    expect(screen.getByAltText("第一镜图片提示")).toHaveAttribute("src", "https://example.com/scene-1.jpg");
+    expect(screen.getByAltText("第二镜图片提示")).toHaveAttribute("src", "https://example.com/scene-2.jpg");
+    expect(screen.getAllByTestId("workflow-video")).toHaveLength(2);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/api/generate/script",
@@ -69,12 +111,22 @@ describe("WorkflowShell", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/generate/image",
-      expect.objectContaining({ body: JSON.stringify({ prompt: "镜头从江南水面推入。" }) }),
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜图片提示" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/api/generate/image",
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜图片提示" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/api/generate/video",
-      expect.objectContaining({ body: JSON.stringify({ prompt: "镜头从江南水面推入。" }) }),
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜视频提示" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/generate/video",
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜视频提示" }) }),
     );
   });
 });

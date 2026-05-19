@@ -18,6 +18,8 @@ describe("generation API routes", () => {
     expect(response.status).toBe(200);
     expect(json.type).toBe("script");
     expect(json.content).toContain("餐饮店开业宣传");
+    expect(json.scenes).toHaveLength(3);
+    expect(json.scenes[0].imagePrompt).toContain("餐饮店开业宣传");
   });
 
   it("returns image results", async () => {

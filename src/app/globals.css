@@ -778,6 +778,23 @@ textarea:focus {
   line-height: 1.9;
 }
 
+.scene-title {
+  margin: 0 0 8px;
+  color: var(--ink-900);
+  font-family: "Noto Serif SC", serif;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.scene-narration {
+  margin-top: 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--gold);
+  color: var(--ink-500);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .image-column {
   background: rgba(249, 248, 244, 0.35);
 }

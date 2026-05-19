@@ -2,9 +2,20 @@ export type GenerationType = "script" | "image" | "video";
 
 export type ProviderName = "mock";
 
+export type ScriptScene = {
+  id: string;
+  title: string;
+  shot: string;
+  narration: string;
+  imagePrompt: string;
+  videoPrompt: string;
+  durationSeconds: number;
+};
+
 export type ScriptResult = {
   type: "script";
   content: string;
+  scenes?: ScriptScene[];
   provider: ProviderName;
   createdAt: string;
 };

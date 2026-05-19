@@ -2,11 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { addHistoryEntry, getHistory } from "@/lib/history";
-import type { GenerationResult, HistoryEntry, ImageResult, ScriptResult, VideoResult } from "@/types/generation";
+import type {
+  GenerationResult,
+  HistoryEntry,
+  ImageResult,
+  ScriptResult,
+  ScriptScene,
+  VideoResult,
+} from "@/types/generation";
 import { ToolTabs } from "./ToolTabs";
 import { WorkflowScenes } from "./WorkflowScenes";
 
 type PipelineStatus = "idle" | "script" | "image" | "video" | "done" | "error";
+
+function scenesForPipeline(script: ScriptResult): ScriptScene[] {
+  if (script.scenes && script.scenes.length > 0) {
+    return script.scenes;
+  }
+
+  return [
+    {
+      id: "scene-1",
+      title: "自动生成",
+      shot: script.content,
+      narration: "",
+      imagePrompt: script.content,
+      videoPrompt: script.content,
+      durationSeconds: 4,
+    },
+  ];
+}
 
 async function postGeneration<T extends GenerationResult>(url: string, body: Record<string, string>): Promise<T> {
   const response = await fetch(url, {
@@ -52,15 +77,21 @@ export function WorkflowShell() {
       addHistoryEntry({ type: "script", input: prompt, result: script });
       refreshWorkflow();
 
+      const scenes = scenesForPipeline(script);
+
       setPipelineStatus("image");
-      const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: script.content });
-      addHistoryEntry({ type: "image", input: script.content, result: image });
-      refreshWorkflow();
+      for (const scene of scenes) {
+        const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: scene.imagePrompt });
+        addHistoryEntry({ type: "image", input: scene.imagePrompt, result: image });
+        refreshWorkflow();
+      }
 
       setPipelineStatus("video");
-      const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: script.content });
-      addHistoryEntry({ type: "video", input: script.content, result: video });
-      refreshWorkflow();
+      for (const scene of scenes) {
+        const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: scene.videoPrompt });
+        addHistoryEntry({ type: "video", input: scene.videoPrompt, result: video });
+        refreshWorkflow();
+      }
 
       setPipelineStatus("done");
     } catch (caught) {
