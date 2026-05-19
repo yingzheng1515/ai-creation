@@ -56,7 +56,11 @@ export function ScriptTool({ onSaved }: ScriptToolProps) {
   return (
     <div className="tool-grid">
       <section className="tool-form" aria-labelledby="script-heading">
-        <h2 id="script-heading">写脚本</h2>
+        <div className="section-heading">
+          <p className="section-kicker">Script</p>
+          <h2 id="script-heading">写脚本</h2>
+          <p>输入主题、受众和风格，生成一版可继续修改的短视频脚本。</p>
+        </div>
         <label className="field">
           <span>需求</span>
           <textarea
@@ -67,15 +71,17 @@ export function ScriptTool({ onSaved }: ScriptToolProps) {
           />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="button" onClick={generate} disabled={isLoading}>
-          {isLoading ? "生成中..." : "生成脚本"}
-        </button>
+        <div className="actions">
+          <button className="primary-button" type="button" onClick={generate} disabled={isLoading}>
+            {isLoading ? "生成中..." : "生成脚本"}
+          </button>
+        </div>
       </section>
 
       <section className="result-panel">
         <div className="panel-title">
           <h3>结果</h3>
-          <button type="button" onClick={copyResult} disabled={!result}>
+          <button className="secondary-button" type="button" onClick={copyResult} disabled={!result}>
             复制
           </button>
         </div>

@@ -29,7 +29,7 @@ export function HistoryPanel({ version, onCleared }: HistoryPanelProps) {
           <h2 id="history-heading">历史</h2>
           <p className="subtitle">最近 50 条结果保存在当前浏览器。</p>
         </div>
-        <button type="button" onClick={clear} disabled={entries.length === 0}>
+        <button className="secondary-button" type="button" onClick={clear} disabled={entries.length === 0}>
           清空
         </button>
       </div>
@@ -41,7 +41,7 @@ export function HistoryPanel({ version, onCleared }: HistoryPanelProps) {
           {entries.map((entry) => (
             <article className="history-item" key={entry.id}>
               <div>
-                <strong>{entry.type}</strong>
+                <strong>{entry.type === "script" ? "脚本" : entry.type === "image" ? "图片" : "视频"}</strong>
                 <p>{entry.input}</p>
               </div>
               <time>{new Date(entry.createdAt).toLocaleString("zh-CN")}</time>

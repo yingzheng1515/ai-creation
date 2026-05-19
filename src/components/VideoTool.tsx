@@ -50,7 +50,11 @@ export function VideoTool({ onSaved }: VideoToolProps) {
   return (
     <div className="tool-grid">
       <section className="tool-form" aria-labelledby="video-heading">
-        <h2 id="video-heading">生视频</h2>
+        <div className="section-heading">
+          <p className="section-kicker">Video</p>
+          <h2 id="video-heading">生视频</h2>
+          <p>输入视频描述，生成一段用于验证流程的预览视频。</p>
+        </div>
         <label className="field">
           <span>视频描述</span>
           <textarea
@@ -61,9 +65,11 @@ export function VideoTool({ onSaved }: VideoToolProps) {
           />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="button" onClick={generate} disabled={isLoading}>
-          {isLoading ? "生成中..." : "生成视频"}
-        </button>
+        <div className="actions">
+          <button className="primary-button" type="button" onClick={generate} disabled={isLoading}>
+            {isLoading ? "生成中..." : "生成视频"}
+          </button>
+        </div>
       </section>
 
       <section className="result-panel">

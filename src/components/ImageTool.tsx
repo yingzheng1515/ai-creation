@@ -50,7 +50,11 @@ export function ImageTool({ onSaved }: ImageToolProps) {
   return (
     <div className="tool-grid">
       <section className="tool-form" aria-labelledby="image-heading">
-        <h2 id="image-heading">生图</h2>
+        <div className="section-heading">
+          <p className="section-kicker">Image</p>
+          <h2 id="image-heading">生图</h2>
+          <p>输入视觉提示词，生成一张可预览的图片结果。</p>
+        </div>
         <label className="field">
           <span>提示词</span>
           <textarea
@@ -61,9 +65,11 @@ export function ImageTool({ onSaved }: ImageToolProps) {
           />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="button" onClick={generate} disabled={isLoading}>
-          {isLoading ? "生成中..." : "生成图片"}
-        </button>
+        <div className="actions">
+          <button className="primary-button" type="button" onClick={generate} disabled={isLoading}>
+            {isLoading ? "生成中..." : "生成图片"}
+          </button>
+        </div>
       </section>
 
       <section className="result-panel">
