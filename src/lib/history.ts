@@ -13,12 +13,12 @@ export function getHistory(): HistoryEntry[] {
     return [];
   }
 
-  const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-  if (!raw) {
-    return [];
-  }
-
   try {
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -37,8 +37,13 @@ export function addHistoryEntry(entry: NewHistoryEntry): HistoryEntry {
     createdAt,
   };
 
-  const next = [saved, ...getHistory()].slice(0, 50);
-  window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  try {
+    const next = [saved, ...getHistory()].slice(0, 50);
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    return saved;
+  }
+
   return saved;
 }
 

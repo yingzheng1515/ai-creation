@@ -15,11 +15,18 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "history", label: "历史" },
 ];
 
-export function ToolTabs() {
+type ToolTabsProps = {
+  onHistoryChange?: () => void;
+};
+
+export function ToolTabs({ onHistoryChange }: ToolTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>("script");
   const [historyVersion, setHistoryVersion] = useState(0);
 
-  const refreshHistory = () => setHistoryVersion((version) => version + 1);
+  const refreshHistory = () => {
+    setHistoryVersion((version) => version + 1);
+    onHistoryChange?.();
+  };
 
   return (
     <section className="workspace">

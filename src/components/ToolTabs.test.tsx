@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ToolTabs } from "./ToolTabs";
 
 describe("ToolTabs", () => {
@@ -21,5 +21,29 @@ describe("ToolTabs", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "生成脚本" }));
     expect(screen.getByText("请输入脚本需求。")).toBeInTheDocument();
+  });
+
+  it("notifies parent components after a generation is saved", async () => {
+    const onHistoryChange = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          type: "script",
+          content: "生成的脚本内容",
+          provider: "mock",
+          createdAt: "2026-05-19T00:00:00.000Z",
+        }),
+      })),
+    );
+
+    render(<ToolTabs onHistoryChange={onHistoryChange} />);
+
+    await userEvent.type(screen.getByLabelText("需求"), "水墨江南宣传片");
+    await userEvent.click(screen.getByRole("button", { name: "生成脚本" }));
+
+    expect(await screen.findByText("生成的脚本内容")).toBeInTheDocument();
+    expect(onHistoryChange).toHaveBeenCalledTimes(1);
   });
 });
