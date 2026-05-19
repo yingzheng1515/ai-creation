@@ -87,6 +87,10 @@ describe("WorkflowShell", () => {
         return { ok: true, json: async () => ({ entries: savedEntries }) };
       }
 
+      if (path === "/api/session") {
+        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123" } }) };
+      }
+
       if (path === "/api/generate/script") {
         return { ok: true, json: async () => script };
       }
@@ -139,9 +143,22 @@ describe("WorkflowShell", () => {
   });
 
   it("switches sidebar sections and explains token usage", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ entries: [] }) })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) => {
+        const path = String(url);
+
+        if (path === "/api/session") {
+          return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123" } }) };
+        }
+
+        return { ok: true, json: async () => ({ entries: [] }) };
+      }),
+    );
 
     render(<WorkflowShell />);
+
+    expect(await screen.findByText("访客 est123")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /我的作品/ }));
     expect(screen.getByRole("heading", { name: "我的作品" })).toBeInTheDocument();

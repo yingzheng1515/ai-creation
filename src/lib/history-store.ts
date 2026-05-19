@@ -5,14 +5,31 @@ import type { NewHistoryEntry } from "./history-schema";
 import type { HistoryEntry } from "@/types/generation";
 
 const HISTORY_LIMIT = 50;
+const SAFE_USER_ID_PATTERN = /[^a-zA-Z0-9_-]/g;
 
-function historyFilePath() {
-  return process.env.HISTORY_FILE_PATH ?? join(process.cwd(), "data", "history.json");
+function historyBaseDir() {
+  if (process.env.HISTORY_DATA_DIR) {
+    return process.env.HISTORY_DATA_DIR;
+  }
+
+  if (process.env.HISTORY_FILE_PATH) {
+    return dirname(process.env.HISTORY_FILE_PATH);
+  }
+
+  return join(process.cwd(), "data");
 }
 
-async function readEntriesFromFile(): Promise<HistoryEntry[]> {
+function sanitizeUserId(userId: string) {
+  return userId.replace(SAFE_USER_ID_PATTERN, "_").slice(0, 96) || "anonymous";
+}
+
+function historyFilePath(userId: string) {
+  return join(historyBaseDir(), "users", sanitizeUserId(userId), "history.json");
+}
+
+async function readEntriesFromFile(userId: string): Promise<HistoryEntry[]> {
   try {
-    const raw = await readFile(historyFilePath(), "utf8");
+    const raw = await readFile(historyFilePath(userId), "utf8");
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(isHistoryEntry) : [];
   } catch (error) {
@@ -28,8 +45,8 @@ async function readEntriesFromFile(): Promise<HistoryEntry[]> {
   }
 }
 
-async function writeEntriesToFile(entries: HistoryEntry[]) {
-  const filePath = historyFilePath();
+async function writeEntriesToFile(userId: string, entries: HistoryEntry[]) {
+  const filePath = historyFilePath(userId);
   const tempPath = `${filePath}.tmp`;
 
   await mkdir(dirname(filePath), { recursive: true });
@@ -37,11 +54,11 @@ async function writeEntriesToFile(entries: HistoryEntry[]) {
   await rename(tempPath, filePath);
 }
 
-export async function listHistoryEntries(): Promise<HistoryEntry[]> {
-  return readEntriesFromFile();
+export async function listHistoryEntries(userId: string): Promise<HistoryEntry[]> {
+  return readEntriesFromFile(userId);
 }
 
-export async function addHistoryEntryToStore(entry: NewHistoryEntry): Promise<HistoryEntry> {
+export async function addHistoryEntryToStore(userId: string, entry: NewHistoryEntry): Promise<HistoryEntry> {
   const createdAt = new Date().toISOString();
   const saved: HistoryEntry = {
     id: `${createdAt}-${Math.random().toString(36).slice(2)}`,
@@ -51,13 +68,13 @@ export async function addHistoryEntryToStore(entry: NewHistoryEntry): Promise<Hi
     provider: entry.result.provider,
     createdAt,
   };
-  const next = [saved, ...(await readEntriesFromFile())].slice(0, HISTORY_LIMIT);
+  const next = [saved, ...(await readEntriesFromFile(userId))].slice(0, HISTORY_LIMIT);
 
-  await writeEntriesToFile(next);
+  await writeEntriesToFile(userId, next);
 
   return saved;
 }
 
-export async function clearHistoryEntries() {
-  await writeEntriesToFile([]);
+export async function clearHistoryEntries(userId: string) {
+  await writeEntriesToFile(userId, []);
 }

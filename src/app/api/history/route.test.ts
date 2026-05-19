@@ -12,11 +12,22 @@ const scriptResult: ScriptResult = {
   createdAt: "2026-05-19T00:00:00.000Z",
 };
 
-const jsonRequest = (body: unknown) =>
+const jsonRequest = (body: unknown, cookie = "ai_creation_session=usr_default123") =>
   new Request("http://localhost/api/history", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
+  });
+
+const getRequest = (cookie = "ai_creation_session=usr_default123") =>
+  new Request("http://localhost/api/history", {
+    headers: { cookie },
+  });
+
+const deleteRequest = (cookie = "ai_creation_session=usr_default123") =>
+  new Request("http://localhost/api/history", {
+    method: "DELETE",
+    headers: { cookie },
   });
 
 describe("history API route", () => {
@@ -53,11 +64,45 @@ describe("history API route", () => {
     expect(saved.input).toBe("水墨江南宣传片");
     expect(saved.result).toEqual(scriptResult);
 
-    const getResponse = await GET();
+    const getResponse = await GET(getRequest());
     const listed = await getResponse.json();
 
     expect(getResponse.status).toBe(200);
     expect(listed.entries).toEqual([saved]);
+  });
+
+  it("keeps generated history isolated by visitor session", async () => {
+    const userOneRequest = new Request("http://localhost/api/history", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: "ai_creation_session=usr_one123" },
+      body: JSON.stringify({ type: "script", input: "用户一", result: scriptResult }),
+    });
+    const userTwoRequest = new Request("http://localhost/api/history", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: "ai_creation_session=usr_two123" },
+      body: JSON.stringify({ type: "script", input: "用户二", result: scriptResult }),
+    });
+
+    await POST(userOneRequest);
+    await POST(userTwoRequest);
+
+    const userOneResponse = await GET(
+      new Request("http://localhost/api/history", {
+        headers: { cookie: "ai_creation_session=usr_one123" },
+      }),
+    );
+    const userTwoResponse = await GET(
+      new Request("http://localhost/api/history", {
+        headers: { cookie: "ai_creation_session=usr_two123" },
+      }),
+    );
+
+    expect((await userOneResponse.json()).entries).toEqual([
+      expect.objectContaining({ input: "用户一" }),
+    ]);
+    expect((await userTwoResponse.json()).entries).toEqual([
+      expect.objectContaining({ input: "用户二" }),
+    ]);
   });
 
   it("rejects malformed history entries", async () => {
@@ -71,13 +116,13 @@ describe("history API route", () => {
   it("clears saved history entries", async () => {
     await POST(jsonRequest({ type: "script", input: "测试", result: scriptResult }));
 
-    const deleteResponse = await DELETE();
+    const deleteResponse = await DELETE(deleteRequest());
     const json = await deleteResponse.json();
 
     expect(deleteResponse.status).toBe(200);
     expect(json.entries).toEqual([]);
 
-    const getResponse = await GET();
+    const getResponse = await GET(getRequest());
     expect(await getResponse.json()).toEqual({ entries: [] });
   });
 });

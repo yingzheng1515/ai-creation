@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { addHistoryEntry, getHistory } from "@/lib/history";
+import { getSession } from "@/lib/session-client";
 import type {
   GenerationResult,
   HistoryEntry,
@@ -74,6 +75,7 @@ async function postGeneration<T extends GenerationResult>(url: string, body: Rec
 export function WorkflowShell() {
   const [historyVersion, setHistoryVersion] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [sessionLabel, setSessionLabel] = useState("访客空间");
   const [activeView, setActiveView] = useState<WorkspaceView>("studio");
   const [isTokenDetailsOpen, setIsTokenDetailsOpen] = useState(false);
   const [pipelinePrompt, setPipelinePrompt] = useState("");
@@ -93,6 +95,20 @@ export function WorkflowShell() {
       isCurrent = false;
     };
   }, [historyVersion]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    getSession().then((session) => {
+      if (isCurrent) {
+        setSessionLabel(session.label);
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
 
@@ -322,7 +338,7 @@ export function WorkflowShell() {
           </div>
           <div className="user-chip">
             <span className="avatar-mark">人</span>
-            <span>吾问无为</span>
+            <span>{sessionLabel}</span>
           </div>
         </div>
       </aside>

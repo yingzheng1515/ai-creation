@@ -1,34 +1,40 @@
 import { NextResponse } from "next/server";
 import { isNewHistoryEntry } from "@/lib/history-schema";
 import { addHistoryEntryToStore, clearHistoryEntries, listHistoryEntries } from "@/lib/history-store";
+import { applySessionCookie, getVisitorSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const entries = await listHistoryEntries();
+export async function GET(request: Request) {
+  const session = getVisitorSession(request);
+  const entries = await listHistoryEntries(session.userId);
 
-  return NextResponse.json({ entries });
+  return applySessionCookie(NextResponse.json({ entries }), session);
 }
 
 export async function POST(request: Request) {
+  const session = getVisitorSession(request);
+
   try {
     const body = await request.json();
 
     if (!isNewHistoryEntry(body)) {
-      return NextResponse.json({ error: "Invalid history entry." }, { status: 400 });
+      return applySessionCookie(NextResponse.json({ error: "Invalid history entry." }, { status: 400 }), session);
     }
 
-    const saved = await addHistoryEntryToStore(body);
+    const saved = await addHistoryEntryToStore(session.userId, body);
 
-    return NextResponse.json(saved, { status: 201 });
+    return applySessionCookie(NextResponse.json(saved, { status: 201 }), session);
   } catch {
-    return NextResponse.json({ error: "History save failed." }, { status: 500 });
+    return applySessionCookie(NextResponse.json({ error: "History save failed." }, { status: 500 }), session);
   }
 }
 
-export async function DELETE() {
-  await clearHistoryEntries();
+export async function DELETE(request: Request) {
+  const session = getVisitorSession(request);
 
-  return NextResponse.json({ entries: [] });
+  await clearHistoryEntries(session.userId);
+
+  return applySessionCookie(NextResponse.json({ entries: [] }), session);
 }

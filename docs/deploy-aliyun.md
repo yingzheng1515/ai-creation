@@ -63,13 +63,17 @@ SEEDANCE_API_URL=你的_seedance_创建任务地址
 SEEDANCE_STATUS_API_URL=你的_seedance_查询任务地址_包含_{taskId}
 SEEDANCE_MODEL=seedance-2.0
 
-# 可选：服务器历史记录保存位置。默认是项目目录下的 data/history.json。
-HISTORY_FILE_PATH=/var/www/ai-creation/data/history.json
+# 可选：服务器历史记录根目录。默认是项目目录下的 data/。
+HISTORY_DATA_DIR=/var/www/ai-creation/data
+
+# 可选：接入 HTTPS 后可以强制开启 Secure Cookie。
+# 现在用公网 IP + HTTP 访问时不要设成 true，否则手机浏览器不会保存访客会话。
+SESSION_COOKIE_SECURE=false
 ```
 
 不要把 `.env.local` 提交到 Git。
 
-`HISTORY_FILE_PATH` 用来保存“我的作品 / 素材宝库 / 历史”里的最近生成记录。MVP 阶段它是一个服务器 JSON 文件，换电脑或手机访问同一台服务器时可以看到同一份记录。
+`HISTORY_DATA_DIR` 用来保存“我的作品 / 素材宝库 / 历史”里的最近生成记录。MVP 阶段它会按浏览器访客会话写入 `data/users/<访客ID>/history.json`，不同访客不会共享同一份作品库。清浏览器 Cookie 或换新浏览器会生成新的访客空间。
 
 ## 4. 安装依赖并构建
 
@@ -88,7 +92,7 @@ pm2 status
 
 本服务默认监听 `127.0.0.1:3000`。
 
-首次部署时创建历史数据目录：
+首次部署时创建历史数据目录。不要在更新部署时删除这个目录：
 
 ```bash
 mkdir -p data
