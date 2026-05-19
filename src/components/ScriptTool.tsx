@@ -38,7 +38,7 @@ export function ScriptTool({ onSaved }: ScriptToolProps) {
       }
 
       setResult(payload);
-      addHistoryEntry({ type: "script", input: trimmed, result: payload });
+      await addHistoryEntry({ type: "script", input: trimmed, result: payload });
       onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "脚本生成失败。");

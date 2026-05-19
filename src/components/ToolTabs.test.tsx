@@ -25,17 +25,44 @@ describe("ToolTabs", () => {
 
   it("notifies parent components after a generation is saved", async () => {
     const onHistoryChange = vi.fn();
+    const scriptResult = {
+      type: "script",
+      content: "生成的脚本内容",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:00.000Z",
+    };
+    const savedEntry = {
+      id: "history-1",
+      type: "script",
+      input: "水墨江南宣传片",
+      result: scriptResult,
+      createdAt: "2026-05-19T00:00:01.000Z",
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "/api/generate/script") {
+        return {
+          ok: true,
+          json: async () => scriptResult,
+        };
+      }
+
+      if (url === "/api/history" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => savedEntry,
+        };
+      }
+
+      return {
+        ok: false,
+        json: async () => ({ error: "Unexpected request" }),
+      };
+    });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          type: "script",
-          content: "生成的脚本内容",
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:00.000Z",
-        }),
-      })),
+      fetchMock,
     );
 
     render(<ToolTabs onHistoryChange={onHistoryChange} />);
@@ -44,6 +71,17 @@ describe("ToolTabs", () => {
     await userEvent.click(screen.getByRole("button", { name: "生成脚本" }));
 
     expect(await screen.findByText("生成的脚本内容")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/history",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          type: "script",
+          input: "水墨江南宣传片",
+          result: scriptResult,
+        }),
+      }),
+    );
     expect(onHistoryChange).toHaveBeenCalledTimes(1);
   });
 });

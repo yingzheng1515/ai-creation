@@ -38,7 +38,7 @@ export function ImageTool({ onSaved }: ImageToolProps) {
       }
 
       setResult(payload);
-      addHistoryEntry({ type: "image", input: trimmed, result: payload });
+      await addHistoryEntry({ type: "image", input: trimmed, result: payload });
       onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "图片生成失败。");

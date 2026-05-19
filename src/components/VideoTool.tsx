@@ -38,7 +38,7 @@ export function VideoTool({ onSaved }: VideoToolProps) {
       }
 
       setResult(payload);
-      addHistoryEntry({ type: "video", input: trimmed, result: payload });
+      await addHistoryEntry({ type: "video", input: trimmed, result: payload });
       onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "视频生成失败。");

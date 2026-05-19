@@ -81,7 +81,17 @@ export function WorkflowShell() {
   const [pipelineError, setPipelineError] = useState("");
 
   useEffect(() => {
-    setEntries(getHistory());
+    let isCurrent = true;
+
+    getHistory().then((historyEntries) => {
+      if (isCurrent) {
+        setEntries(historyEntries);
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [historyVersion]);
 
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
@@ -99,7 +109,7 @@ export function WorkflowShell() {
     try {
       setPipelineStatus("script");
       const script = await postGeneration<ScriptResult>("/api/generate/script", { requirement: prompt });
-      addHistoryEntry({ type: "script", input: prompt, result: script });
+      await addHistoryEntry({ type: "script", input: prompt, result: script });
       refreshWorkflow();
 
       const scenes = scenesForPipeline(script);
@@ -107,14 +117,14 @@ export function WorkflowShell() {
       setPipelineStatus("image");
       for (const scene of scenes) {
         const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: scene.imagePrompt });
-        addHistoryEntry({ type: "image", input: scene.imagePrompt, result: image });
+        await addHistoryEntry({ type: "image", input: scene.imagePrompt, result: image });
         refreshWorkflow();
       }
 
       setPipelineStatus("video");
       for (const scene of scenes) {
         const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: scene.videoPrompt });
-        addHistoryEntry({ type: "video", input: scene.videoPrompt, result: video });
+        await addHistoryEntry({ type: "video", input: scene.videoPrompt, result: video });
         refreshWorkflow();
       }
 
@@ -151,7 +161,7 @@ export function WorkflowShell() {
           <div className="library-heading">
             <p className="section-kicker">Works</p>
             <h2 id="works-heading">我的作品</h2>
-            <p>这里汇总当前浏览器保存的脚本、图片和视频。</p>
+            <p>这里汇总服务器保存的脚本、图片和视频，换设备也能继续查看。</p>
           </div>
           {entries.length === 0 ? (
             <div className="result-empty">还没有作品。先回到创作台生成一条内容。</div>

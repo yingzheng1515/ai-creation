@@ -5,91 +5,104 @@ import { WorkflowShell } from "./WorkflowShell";
 
 describe("WorkflowShell", () => {
   beforeEach(() => {
-    const store = new Map<string, string>();
-
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => store.set(key, value),
-        removeItem: (key: string) => store.delete(key),
-        clear: () => store.clear(),
-      },
-    });
+    vi.restoreAllMocks();
   });
 
   it("runs the full script-image-video pipeline from one prompt", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: "script",
-          content: "镜头从江南水面推入。",
-          scenes: [
-            {
-              id: "scene-1",
-              title: "晨雾入画",
-              shot: "镜头从江南水面推入。",
-              narration: "江南醒来。",
-              imagePrompt: "第一镜图片提示",
-              videoPrompt: "第一镜视频提示",
-              durationSeconds: 4,
-            },
-            {
-              id: "scene-2",
-              title: "乌篷船过桥",
-              shot: "乌篷船穿过拱桥。",
-              narration: "水路把故事带向远方。",
-              imagePrompt: "第二镜图片提示",
-              videoPrompt: "第二镜视频提示",
-              durationSeconds: 5,
-            },
-          ],
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:00.000Z",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: "image",
-          url: "https://example.com/scene-1.jpg",
-          prompt: "第一镜图片提示",
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:01.000Z",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: "image",
-          url: "https://example.com/scene-2.jpg",
-          prompt: "第二镜图片提示",
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:02.000Z",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: "video",
-          url: "https://example.com/scene-1.mp4",
-          prompt: "第一镜视频提示",
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:03.000Z",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          type: "video",
-          url: "https://example.com/scene-2.mp4",
-          prompt: "第二镜视频提示",
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:04.000Z",
-        }),
-      });
+    const script = {
+      type: "script",
+      content: "镜头从江南水面推入。",
+      scenes: [
+        {
+          id: "scene-1",
+          title: "晨雾入画",
+          shot: "镜头从江南水面推入。",
+          narration: "江南醒来。",
+          imagePrompt: "第一镜图片提示",
+          videoPrompt: "第一镜视频提示",
+          durationSeconds: 4,
+        },
+        {
+          id: "scene-2",
+          title: "乌篷船过桥",
+          shot: "乌篷船穿过拱桥。",
+          narration: "水路把故事带向远方。",
+          imagePrompt: "第二镜图片提示",
+          videoPrompt: "第二镜视频提示",
+          durationSeconds: 5,
+        },
+      ],
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:00.000Z",
+    };
+    const imageOne = {
+      type: "image",
+      url: "https://example.com/scene-1.jpg",
+      prompt: "第一镜图片提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:01.000Z",
+    };
+    const imageTwo = {
+      type: "image",
+      url: "https://example.com/scene-2.jpg",
+      prompt: "第二镜图片提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:02.000Z",
+    };
+    const videoOne = {
+      type: "video",
+      url: "https://example.com/scene-1.mp4",
+      prompt: "第一镜视频提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:03.000Z",
+    };
+    const videoTwo = {
+      type: "video",
+      url: "https://example.com/scene-2.mp4",
+      prompt: "第二镜视频提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:04.000Z",
+    };
+    const savedEntries: unknown[] = [];
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+
+      if (path === "/api/history" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        const saved = {
+          id: `saved-${body.type}-${body.input}`,
+          provider: body.result.provider,
+          createdAt: body.result.createdAt,
+          ...body,
+        };
+        savedEntries.unshift(saved);
+
+        return {
+          ok: true,
+          json: async () => saved,
+        };
+      }
+
+      if (path === "/api/history") {
+        return { ok: true, json: async () => ({ entries: savedEntries }) };
+      }
+
+      if (path === "/api/generate/script") {
+        return { ok: true, json: async () => script };
+      }
+
+      if (path === "/api/generate/image") {
+        const body = JSON.parse(String(init?.body));
+        return { ok: true, json: async () => (body.prompt === "第一镜图片提示" ? imageOne : imageTwo) };
+      }
+
+      if (path === "/api/generate/video") {
+        const body = JSON.parse(String(init?.body));
+        return { ok: true, json: async () => (body.prompt === "第一镜视频提示" ? videoOne : videoTwo) };
+      }
+
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<WorkflowShell />);
@@ -103,39 +116,36 @@ describe("WorkflowShell", () => {
     expect(screen.getByAltText("第一镜图片提示")).toHaveAttribute("src", "https://example.com/scene-1.jpg");
     expect(screen.getByAltText("第二镜图片提示")).toHaveAttribute("src", "https://example.com/scene-2.jpg");
     expect(screen.getAllByTestId("workflow-video")).toHaveLength(2);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/generate/script",
       expect.objectContaining({ body: JSON.stringify({ requirement: "水墨江南宣传片" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/generate/image",
       expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜图片提示" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/generate/image",
       expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜图片提示" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/generate/video",
       expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜视频提示" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/generate/video",
       expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜视频提示" }) }),
     );
   });
 
   it("switches sidebar sections and explains token usage", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ entries: [] }) })));
+
     render(<WorkflowShell />);
 
     await userEvent.click(screen.getByRole("button", { name: /我的作品/ }));
     expect(screen.getByRole("heading", { name: "我的作品" })).toBeInTheDocument();
-    expect(screen.getByText("这里汇总当前浏览器保存的脚本、图片和视频。")).toBeInTheDocument();
+    expect(screen.getByText("这里汇总服务器保存的脚本、图片和视频，换设备也能继续查看。")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /素材宝库/ }));
     expect(screen.getByRole("heading", { name: "素材宝库" })).toBeInTheDocument();
@@ -149,15 +159,18 @@ describe("WorkflowShell", () => {
     expect(screen.getByText("Token 是生成脚本、图片和视频时预估消耗的额度。")).toBeInTheDocument();
   });
 
-  it("renders when cached history contains obsolete entries", () => {
-    window.localStorage.setItem(
-      "ai-creation-history:v1",
-      JSON.stringify([{ id: "obsolete", type: "image", input: "旧手机缓存" }]),
+  it("renders when server history contains obsolete entries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ entries: [{ id: "obsolete", type: "image", input: "旧缓存" }] }),
+      })),
     );
 
     render(<WorkflowShell />);
 
     expect(screen.getByRole("heading", { name: "初始灵感 Prompt" })).toBeInTheDocument();
-    expect(screen.getByText("等待脚本生成")).toBeInTheDocument();
+    expect(await screen.findByText("等待脚本生成")).toBeInTheDocument();
   });
 });

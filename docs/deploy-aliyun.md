@@ -62,9 +62,14 @@ SEEDANCE_API_KEY=你的_seedance_key
 SEEDANCE_API_URL=你的_seedance_创建任务地址
 SEEDANCE_STATUS_API_URL=你的_seedance_查询任务地址_包含_{taskId}
 SEEDANCE_MODEL=seedance-2.0
+
+# 可选：服务器历史记录保存位置。默认是项目目录下的 data/history.json。
+HISTORY_FILE_PATH=/var/www/ai-creation/data/history.json
 ```
 
 不要把 `.env.local` 提交到 Git。
+
+`HISTORY_FILE_PATH` 用来保存“我的作品 / 素材宝库 / 历史”里的最近生成记录。MVP 阶段它是一个服务器 JSON 文件，换电脑或手机访问同一台服务器时可以看到同一份记录。
 
 ## 4. 安装依赖并构建
 
@@ -82,6 +87,12 @@ pm2 status
 ```
 
 本服务默认监听 `127.0.0.1:3000`。
+
+首次部署时创建历史数据目录：
+
+```bash
+mkdir -p data
+```
 
 可以用下面命令检查后端是否通：
 
@@ -143,6 +154,24 @@ git pull
 npm ci
 npm run build
 pm2 restart ai-creation
+```
+
+如果你用压缩包覆盖上传代码，排除 `.env.local` 和 `data/`，否则会覆盖服务器密钥或历史记录：
+
+```bash
+tar --exclude='.git' --exclude='node_modules' --exclude='.next' --exclude='.env.local' --exclude='data' -czf /tmp/ai-creation-latest.tgz .
+scp /tmp/ai-creation-latest.tgz root@你的服务器公网IP:/tmp/
+```
+
+服务器上执行：
+
+```bash
+cd /var/www/ai-creation
+tar -xzf /tmp/ai-creation-latest.tgz
+mkdir -p data
+npm ci
+npm run build
+pm2 restart ai-creation --update-env
 ```
 
 ## 常见问题

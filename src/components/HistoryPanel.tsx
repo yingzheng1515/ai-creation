@@ -13,11 +13,21 @@ export function HistoryPanel({ version, onCleared }: HistoryPanelProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
-    setEntries(getHistory());
+    let isCurrent = true;
+
+    getHistory().then((historyEntries) => {
+      if (isCurrent) {
+        setEntries(historyEntries);
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [version]);
 
-  function clear() {
-    clearHistory();
+  async function clear() {
+    await clearHistory();
     setEntries([]);
     onCleared();
   }
@@ -27,7 +37,7 @@ export function HistoryPanel({ version, onCleared }: HistoryPanelProps) {
       <div className="panel-title">
         <div>
           <h2 id="history-heading">历史</h2>
-          <p className="subtitle">最近 50 条结果保存在当前浏览器。</p>
+          <p className="subtitle">最近 50 条结果保存在服务器。</p>
         </div>
         <button className="secondary-button" type="button" onClick={clear} disabled={entries.length === 0}>
           清空

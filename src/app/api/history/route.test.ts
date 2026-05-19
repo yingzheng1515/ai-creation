@@ -1,0 +1,83 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DELETE, GET, POST } from "./route";
+import type { ScriptResult } from "@/types/generation";
+
+const scriptResult: ScriptResult = {
+  type: "script",
+  content: "服务器保存的脚本",
+  provider: "mock",
+  createdAt: "2026-05-19T00:00:00.000Z",
+};
+
+const jsonRequest = (body: unknown) =>
+  new Request("http://localhost/api/history", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+describe("history API route", () => {
+  let tempDir = "";
+  const originalHistoryFilePath = process.env.HISTORY_FILE_PATH;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "ai-history-"));
+    process.env.HISTORY_FILE_PATH = join(tempDir, "history.json");
+  });
+
+  afterEach(async () => {
+    if (originalHistoryFilePath === undefined) {
+      delete process.env.HISTORY_FILE_PATH;
+    } else {
+      process.env.HISTORY_FILE_PATH = originalHistoryFilePath;
+    }
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("saves and lists generated history entries", async () => {
+    const postResponse = await POST(
+      jsonRequest({
+        type: "script",
+        input: "水墨江南宣传片",
+        result: scriptResult,
+      }),
+    );
+    const saved = await postResponse.json();
+
+    expect(postResponse.status).toBe(201);
+    expect(saved.type).toBe("script");
+    expect(saved.input).toBe("水墨江南宣传片");
+    expect(saved.result).toEqual(scriptResult);
+
+    const getResponse = await GET();
+    const listed = await getResponse.json();
+
+    expect(getResponse.status).toBe(200);
+    expect(listed.entries).toEqual([saved]);
+  });
+
+  it("rejects malformed history entries", async () => {
+    const response = await POST(jsonRequest({ type: "image", input: "坏数据" }));
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error).toBe("Invalid history entry.");
+  });
+
+  it("clears saved history entries", async () => {
+    await POST(jsonRequest({ type: "script", input: "测试", result: scriptResult }));
+
+    const deleteResponse = await DELETE();
+    const json = await deleteResponse.json();
+
+    expect(deleteResponse.status).toBe(200);
+    expect(json.entries).toEqual([]);
+
+    const getResponse = await GET();
+    expect(await getResponse.json()).toEqual({ entries: [] });
+  });
+});

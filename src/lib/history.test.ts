@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addHistoryEntry, clearHistory, getHistory } from "./history";
 import type { ScriptResult } from "@/types/generation";
 
@@ -9,61 +9,70 @@ const result: ScriptResult = {
   createdAt: "2026-05-19T00:00:00.000Z",
 };
 
-describe("local history", () => {
+const savedEntry = {
+  id: "entry-1",
+  type: "script",
+  input: "有效缓存",
+  result,
+  provider: "mock",
+  createdAt: "2026-05-19T00:00:00.000Z",
+};
+
+describe("server history client", () => {
   beforeEach(() => {
-    const store = new Map<string, string>();
-
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => store.set(key, value),
-        removeItem: (key: string) => store.delete(key),
-        clear: () => store.clear(),
-      },
-    });
+    vi.restoreAllMocks();
   });
 
-  it("adds newest entries first", () => {
-    addHistoryEntry({ type: "script", input: "第一个", result });
-    addHistoryEntry({ type: "script", input: "第二个", result });
+  it("lists server history entries and ignores malformed payloads", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        entries: [{ id: "broken-entry", type: "image", input: "旧缓存" }, savedEntry],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    expect(getHistory()).toHaveLength(2);
-    expect(getHistory()[0].input).toBe("第二个");
+    await expect(getHistory()).resolves.toEqual([savedEntry]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/history", { method: "GET" });
   });
 
-  it("clears entries", () => {
-    addHistoryEntry({ type: "script", input: "测试", result });
-    clearHistory();
+  it("saves a history entry through the server API", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => savedEntry,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    expect(getHistory()).toEqual([]);
-  });
-
-  it("ignores malformed cached entries", () => {
-    window.localStorage.setItem(
-      "ai-creation-history:v1",
-      JSON.stringify([
-        { id: "broken-entry", type: "image", input: "旧缓存" },
-        {
-          id: "valid-entry",
-          type: "script",
-          input: "有效缓存",
-          result,
-          provider: "mock",
-          createdAt: "2026-05-19T00:00:00.000Z",
-        },
-      ]),
+    await expect(addHistoryEntry({ type: "script", input: "有效缓存", result })).resolves.toEqual(savedEntry);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/history",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ type: "script", input: "有效缓存", result }),
+      }),
     );
+  });
 
-    expect(getHistory()).toEqual([
-      {
-        id: "valid-entry",
-        type: "script",
-        input: "有效缓存",
-        result,
-        provider: "mock",
-        createdAt: "2026-05-19T00:00:00.000Z",
-      },
-    ]);
+  it("clears server history entries", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ entries: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await clearHistory();
+    expect(fetchMock).toHaveBeenCalledWith("/api/history", { method: "DELETE" });
+  });
+
+  it("returns an unsaved entry if the server save fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network failed");
+    }));
+
+    const saved = await addHistoryEntry({ type: "script", input: "离线保存", result });
+
+    expect(saved.input).toBe("离线保存");
+    expect(saved.result).toEqual(result);
+    expect(saved.id).toContain("-");
   });
 });
