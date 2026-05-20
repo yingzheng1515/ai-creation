@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { addHistoryEntry, getHistory } from "@/lib/history";
+import { addProject, getProjects } from "@/lib/projects";
 import { getSession, login, logout } from "@/lib/session-client";
 import type { ClientSession } from "@/lib/session-client";
 import type {
@@ -13,6 +14,7 @@ import type {
   ScriptScene,
   VideoResult,
 } from "@/types/generation";
+import type { CreationProject, ProjectScene } from "@/types/projects";
 import { ToolTabs } from "./ToolTabs";
 import { WorkflowScenes } from "./WorkflowScenes";
 
@@ -59,6 +61,12 @@ function scenesForPipeline(script: ScriptResult): ScriptScene[] {
   ];
 }
 
+function projectTitleFromPrompt(prompt: string): string {
+  const normalized = prompt.replace(/\s+/g, " ").trim();
+
+  return normalized.length > 22 ? `${normalized.slice(0, 22)}...` : normalized;
+}
+
 async function postGeneration<T extends GenerationResult>(url: string, body: Record<string, string>): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
@@ -76,7 +84,10 @@ async function postGeneration<T extends GenerationResult>(url: string, body: Rec
 
 export function WorkflowShell() {
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [projectVersion, setProjectVersion] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [projects, setProjects] = useState<CreationProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [session, setSession] = useState<ClientSession>({ id: "unknown", label: "访客空间", isAuthenticated: false });
   const [accountName, setAccountName] = useState("");
   const [accessCode, setAccessCode] = useState("");
@@ -105,6 +116,23 @@ export function WorkflowShell() {
   useEffect(() => {
     let isCurrent = true;
 
+    getProjects().then((loadedProjects) => {
+      if (isCurrent) {
+        setProjects(loadedProjects);
+        setSelectedProjectId((currentProjectId) =>
+          currentProjectId && loadedProjects.some((project) => project.id === currentProjectId) ? currentProjectId : null,
+        );
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [projectVersion]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
     getSession().then((loadedSession) => {
       if (isCurrent) {
         setSession(loadedSession);
@@ -117,6 +145,7 @@ export function WorkflowShell() {
   }, []);
 
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
+  const refreshProjects = () => setProjectVersion((version) => version + 1);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,6 +157,7 @@ export function WorkflowShell() {
       setSession(nextSession);
       setAccessCode("");
       refreshWorkflow();
+      refreshProjects();
     } catch (caught) {
       setAuthError(caught instanceof Error ? caught.message : "登录失败。");
     } finally {
@@ -145,6 +175,7 @@ export function WorkflowShell() {
       setAccountName("");
       setAccessCode("");
       refreshWorkflow();
+      refreshProjects();
     } catch (caught) {
       setAuthError(caught instanceof Error ? caught.message : "退出失败。");
     } finally {
@@ -169,11 +200,14 @@ export function WorkflowShell() {
       refreshWorkflow();
 
       const scenes = scenesForPipeline(script);
+      const imageResults = new Map<string, ImageResult>();
+      const videoResults = new Map<string, VideoResult>();
 
       setPipelineStatus("image");
       for (const scene of scenes) {
         const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: scene.imagePrompt });
         await addHistoryEntry({ type: "image", input: scene.imagePrompt, result: image });
+        imageResults.set(scene.id, image);
         refreshWorkflow();
       }
 
@@ -181,9 +215,25 @@ export function WorkflowShell() {
       for (const scene of scenes) {
         const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: scene.videoPrompt });
         await addHistoryEntry({ type: "video", input: scene.videoPrompt, result: video });
+        videoResults.set(scene.id, video);
         refreshWorkflow();
       }
 
+      const projectScenes: ProjectScene[] = scenes.map((scene) => ({
+        ...scene,
+        image: imageResults.get(scene.id),
+        status: imageResults.has(scene.id) && videoResults.has(scene.id) ? "done" : "partial",
+        video: videoResults.get(scene.id),
+      }));
+      const savedProject = await addProject({
+        title: projectTitleFromPrompt(prompt),
+        prompt,
+        status: projectScenes.every((scene) => scene.status === "done") ? "done" : "partial",
+        script,
+        scenes: projectScenes,
+      });
+
+      setProjects((currentProjects) => [savedProject, ...currentProjects.filter((project) => project.id !== savedProject.id)]);
       setPipelineStatus("done");
     } catch (caught) {
       setPipelineStatus("error");
@@ -204,6 +254,7 @@ export function WorkflowShell() {
 
   const imageAssets = entries.filter((entry) => entry.result.type === "image");
   const videoAssets = entries.filter((entry) => entry.result.type === "video");
+  const selectedProject = selectedProjectId ? projects.find((project) => project.id === selectedProjectId) ?? null : null;
 
   function useTemplate(prompt: string) {
     setPipelinePrompt(prompt);
@@ -212,22 +263,64 @@ export function WorkflowShell() {
 
   function renderWorkspaceView() {
     if (activeView === "works") {
+      if (selectedProject) {
+        return (
+          <section className="library-panel project-detail" aria-labelledby="project-detail-heading">
+            <button className="secondary-button" type="button" onClick={() => setSelectedProjectId(null)}>
+              返回作品列表
+            </button>
+            <div className="library-heading">
+              <p className="section-kicker">Project</p>
+              <h2 id="project-detail-heading">{selectedProject.title}</h2>
+              <p>{selectedProject.prompt}</p>
+            </div>
+            <article className="project-script">
+              <h3>脚本</h3>
+              <p>{selectedProject.script.content}</p>
+            </article>
+            <div className="project-scene-list">
+              {selectedProject.scenes.map((scene, index) => (
+                <article className="project-scene-card" key={scene.id}>
+                  <header>
+                    <strong>镜 {String(index + 1).padStart(2, "0")}</strong>
+                    <span>{scene.title} / {scene.durationSeconds} 秒</span>
+                  </header>
+                  <p>{scene.shot}</p>
+                  {scene.image ? <img src={scene.image.url} alt={scene.image.prompt} /> : null}
+                  {scene.video ? (
+                    <video src={scene.video.url} controls>
+                      <track kind="captions" />
+                    </video>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
       return (
         <section className="library-panel" aria-labelledby="works-heading">
           <div className="library-heading">
             <p className="section-kicker">Works</p>
             <h2 id="works-heading">我的作品</h2>
-            <p>这里汇总服务器保存的脚本、图片和视频，换设备也能继续查看。</p>
+            <p>这里汇总一键生成的完整项目，换设备也能继续查看。</p>
           </div>
-          {entries.length === 0 ? (
-            <div className="result-empty">还没有作品。先回到创作台生成一条内容。</div>
+          {projects.length === 0 ? (
+            <div className="result-empty">还没有项目。先回到创作台完成一次全链路生成。</div>
           ) : (
             <div className="library-list">
-              {entries.map((entry) => (
-                <article className="library-item" key={entry.id}>
-                  <strong>{entry.type === "script" ? "脚本" : entry.type === "image" ? "图片" : "视频"}</strong>
-                  <p>{entry.input}</p>
-                  <time>{new Date(entry.createdAt).toLocaleString("zh-CN")}</time>
+              {projects.map((project) => (
+                <article className="library-item project-item" key={project.id}>
+                  <div>
+                    <strong>{project.title}</strong>
+                    <p>{project.prompt}</p>
+                    <span>{project.scenes.length} 个镜头</span>
+                    <time>{new Date(project.createdAt).toLocaleString("zh-CN")}</time>
+                  </div>
+                  <button className="secondary-button" type="button" onClick={() => setSelectedProjectId(project.id)}>
+                    打开项目
+                  </button>
                 </article>
               ))}
             </div>

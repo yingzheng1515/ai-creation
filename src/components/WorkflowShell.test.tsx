@@ -64,8 +64,29 @@ describe("WorkflowShell", () => {
       createdAt: "2026-05-19T00:00:04.000Z",
     };
     const savedEntries: unknown[] = [];
+    const savedProjects: unknown[] = [];
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
+
+      if (path === "/api/projects" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        const saved = {
+          id: "project-1",
+          createdAt: "2026-05-19T00:00:05.000Z",
+          updatedAt: "2026-05-19T00:00:05.000Z",
+          ...body,
+        };
+        savedProjects.unshift(saved);
+
+        return {
+          ok: true,
+          json: async () => saved,
+        };
+      }
+
+      if (path === "/api/projects") {
+        return { ok: true, json: async () => ({ projects: savedProjects }) };
+      }
 
       if (path === "/api/history" && init?.method === "POST") {
         const body = JSON.parse(String(init.body));
@@ -140,6 +161,22 @@ describe("WorkflowShell", () => {
       "/api/generate/video",
       expect.objectContaining({ body: JSON.stringify({ prompt: "第二镜视频提示" }) }),
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/projects",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("水墨江南宣传片"),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /我的作品/ }));
+    expect(screen.getByRole("heading", { name: "我的作品" })).toBeInTheDocument();
+    expect(screen.getAllByText("水墨江南宣传片").length).toBeGreaterThan(0);
+    expect(screen.getByText("2 个镜头")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "打开项目" }));
+    expect(screen.getByRole("heading", { name: "水墨江南宣传片" })).toBeInTheDocument();
+    expect(screen.getByText("脚本")).toBeInTheDocument();
   });
 
   it("switches sidebar sections and explains token usage", async () => {
@@ -162,7 +199,7 @@ describe("WorkflowShell", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /我的作品/ }));
     expect(screen.getByRole("heading", { name: "我的作品" })).toBeInTheDocument();
-    expect(screen.getByText("这里汇总服务器保存的脚本、图片和视频，换设备也能继续查看。")).toBeInTheDocument();
+    expect(screen.getByText("这里汇总一键生成的完整项目，换设备也能继续查看。")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /素材宝库/ }));
     expect(screen.getByRole("heading", { name: "素材宝库" })).toBeInTheDocument();
