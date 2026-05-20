@@ -19,7 +19,25 @@ import { ToolTabs } from "./ToolTabs";
 import { WorkflowScenes } from "./WorkflowScenes";
 
 type PipelineStatus = "idle" | "script" | "image" | "video" | "done" | "error";
+type PipelineStage = "script" | "image" | "video";
+type PipelineStepStatus = "pending" | "running" | "done" | "failed";
 type WorkspaceView = "studio" | "works" | "assets" | "templates";
+
+type PipelineStep = {
+  detail: string;
+  status: PipelineStepStatus;
+};
+
+type PipelineSteps = Record<PipelineStage, PipelineStep>;
+
+type PipelineDraft = {
+  failedStage?: PipelineStage;
+  imageResults: Record<string, ImageResult>;
+  prompt: string;
+  scenes: ScriptScene[];
+  script?: ScriptResult;
+  videoResults: Record<string, VideoResult>;
+};
 
 const navItems: Array<{ icon: string; label: string; view: WorkspaceView }> = [
   { icon: "层", label: "创作台", view: "studio" },
@@ -42,6 +60,20 @@ const scriptTemplates = [
     prompt: "写一支活动预热视频，节奏紧凑，包含场景氛围、核心亮点和报名引导。",
   },
 ];
+
+const pipelineStages: Array<{ failed: string; id: PipelineStage; label: string; running: string }> = [
+  { id: "script", label: "剧本分镜", running: "正在衍化剧本", failed: "剧本分镜失败" },
+  { id: "image", label: "画面生成", running: "正在生成画面", failed: "画面生成失败" },
+  { id: "video", label: "视频合成", running: "正在合成视频", failed: "视频合成失败" },
+];
+
+function initialPipelineSteps(): PipelineSteps {
+  return {
+    script: { detail: "等待输入核心创意", status: "pending" },
+    image: { detail: "等待剧本完成", status: "pending" },
+    video: { detail: "等待画面完成", status: "pending" },
+  };
+}
 
 function scenesForPipeline(script: ScriptResult): ScriptScene[] {
   if (script.scenes && script.scenes.length > 0) {
@@ -98,6 +130,8 @@ export function WorkflowShell() {
   const [pipelinePrompt, setPipelinePrompt] = useState("");
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>("idle");
   const [pipelineError, setPipelineError] = useState("");
+  const [pipelineSteps, setPipelineSteps] = useState<PipelineSteps>(() => initialPipelineSteps());
+  const [pipelineDraft, setPipelineDraft] = useState<PipelineDraft | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -183,65 +217,175 @@ export function WorkflowShell() {
     }
   }
 
-  async function runPipeline() {
-    const prompt = pipelinePrompt.trim();
+  function setPipelineStep(stage: PipelineStage, nextStep: Partial<PipelineStep>) {
+    setPipelineSteps((currentSteps) => ({
+      ...currentSteps,
+      [stage]: {
+        ...currentSteps[stage],
+        ...nextStep,
+      },
+    }));
+  }
+
+  function seedPipelineSteps(stage: PipelineStage, draft?: PipelineDraft): PipelineSteps {
+    const nextSteps = initialPipelineSteps();
+
+    if (draft?.script) {
+      nextSteps.script = { detail: "剧本已生成", status: "done" };
+    }
+
+    if (draft && draft.scenes.length > 0 && draft.scenes.every((scene) => draft.imageResults[scene.id])) {
+      nextSteps.image = { detail: "画面已生成", status: "done" };
+    }
+
+    if (draft && draft.scenes.length > 0 && draft.scenes.every((scene) => draft.videoResults[scene.id])) {
+      nextSteps.video = { detail: "视频已合成", status: "done" };
+    }
+
+    nextSteps[stage] = {
+      detail: pipelineStages.find((item) => item.id === stage)?.running ?? "正在处理",
+      status: "running",
+    };
+
+    return nextSteps;
+  }
+
+  async function saveProjectFromDraft(draft: PipelineDraft) {
+    if (!draft.script) {
+      return null;
+    }
+
+    const projectScenes: ProjectScene[] = draft.scenes.map((scene) => ({
+      ...scene,
+      image: draft.imageResults[scene.id],
+      status: draft.imageResults[scene.id] && draft.videoResults[scene.id] ? "done" : "partial",
+      video: draft.videoResults[scene.id],
+    }));
+    const savedProject = await addProject({
+      title: projectTitleFromPrompt(draft.prompt),
+      prompt: draft.prompt,
+      status: projectScenes.every((scene) => scene.status === "done") ? "done" : "partial",
+      script: draft.script,
+      scenes: projectScenes,
+    });
+
+    setProjects((currentProjects) => [savedProject, ...currentProjects.filter((project) => project.id !== savedProject.id)]);
+
+    return savedProject;
+  }
+
+  async function executePipeline(startStage: PipelineStage, existingDraft?: PipelineDraft) {
+    const prompt = (existingDraft?.prompt ?? pipelinePrompt).trim();
     if (!prompt) {
       setPipelineStatus("error");
       setPipelineError("请输入核心创意。");
+      setPipelineSteps({
+        ...initialPipelineSteps(),
+        script: { detail: "请输入核心创意。", status: "failed" },
+      });
       return;
     }
 
+    const draft: PipelineDraft = existingDraft
+      ? {
+          ...existingDraft,
+          failedStage: undefined,
+          imageResults: { ...existingDraft.imageResults },
+          videoResults: { ...existingDraft.videoResults },
+        }
+      : { imageResults: {}, prompt, scenes: [], videoResults: {} };
+    let currentStage: PipelineStage = startStage;
+
     setPipelineError("");
+    setPipelineDraft(draft);
+    setPipelineSteps(seedPipelineSteps(startStage, draft));
 
     try {
-      setPipelineStatus("script");
-      const script = await postGeneration<ScriptResult>("/api/generate/script", { requirement: prompt });
-      await addHistoryEntry({ type: "script", input: prompt, result: script });
-      refreshWorkflow();
+      if (startStage === "script") {
+        currentStage = "script";
+        setPipelineStatus("script");
+        setPipelineStep("script", { detail: "正在衍化剧本", status: "running" });
+        const script = await postGeneration<ScriptResult>("/api/generate/script", { requirement: prompt });
+        await addHistoryEntry({ type: "script", input: prompt, result: script });
+        draft.script = script;
+        draft.scenes = scenesForPipeline(script);
+        draft.imageResults = {};
+        draft.videoResults = {};
+        setPipelineDraft({ ...draft });
+        setPipelineStep("script", { detail: "剧本已生成", status: "done" });
+        refreshWorkflow();
+      }
 
-      const scenes = scenesForPipeline(script);
-      const imageResults = new Map<string, ImageResult>();
-      const videoResults = new Map<string, VideoResult>();
+      if (!draft.script || draft.scenes.length === 0) {
+        throw new Error("剧本没有返回可用场景。");
+      }
 
-      setPipelineStatus("image");
-      for (const scene of scenes) {
+      if (startStage === "script" || startStage === "image") {
+        currentStage = "image";
+        setPipelineStatus("image");
+        setPipelineStep("image", { detail: "正在生成画面", status: "running" });
+      }
+      for (const scene of draft.scenes) {
+        if (draft.imageResults[scene.id]) {
+          continue;
+        }
+
         const image = await postGeneration<ImageResult>("/api/generate/image", { prompt: scene.imagePrompt });
         await addHistoryEntry({ type: "image", input: scene.imagePrompt, result: image });
-        imageResults.set(scene.id, image);
+        draft.imageResults[scene.id] = image;
+        setPipelineDraft({ ...draft, imageResults: { ...draft.imageResults } });
         refreshWorkflow();
       }
+      setPipelineStep("image", { detail: "画面已生成", status: "done" });
 
+      currentStage = "video";
       setPipelineStatus("video");
-      for (const scene of scenes) {
+      setPipelineStep("video", { detail: "正在合成视频", status: "running" });
+      for (const scene of draft.scenes) {
+        if (draft.videoResults[scene.id]) {
+          continue;
+        }
+
         const video = await postGeneration<VideoResult>("/api/generate/video", { prompt: scene.videoPrompt });
         await addHistoryEntry({ type: "video", input: scene.videoPrompt, result: video });
-        videoResults.set(scene.id, video);
+        draft.videoResults[scene.id] = video;
+        setPipelineDraft({ ...draft, videoResults: { ...draft.videoResults } });
         refreshWorkflow();
       }
+      setPipelineStep("video", { detail: "视频已合成", status: "done" });
 
-      const projectScenes: ProjectScene[] = scenes.map((scene) => ({
-        ...scene,
-        image: imageResults.get(scene.id),
-        status: imageResults.has(scene.id) && videoResults.has(scene.id) ? "done" : "partial",
-        video: videoResults.get(scene.id),
-      }));
-      const savedProject = await addProject({
-        title: projectTitleFromPrompt(prompt),
-        prompt,
-        status: projectScenes.every((scene) => scene.status === "done") ? "done" : "partial",
-        script,
-        scenes: projectScenes,
-      });
-
-      setProjects((currentProjects) => [savedProject, ...currentProjects.filter((project) => project.id !== savedProject.id)]);
+      await saveProjectFromDraft(draft);
+      setPipelineDraft({ ...draft, failedStage: undefined });
       setPipelineStatus("done");
     } catch (caught) {
+      const errorMessage = caught instanceof Error ? caught.message : "全链路生成失败。";
+      const failedLabel = pipelineStages.find((stage) => stage.id === currentStage)?.failed ?? "生成失败";
+
+      draft.failedStage = currentStage;
+      setPipelineDraft({ ...draft });
       setPipelineStatus("error");
-      setPipelineError(caught instanceof Error ? caught.message : "全链路生成失败。");
+      setPipelineStep(currentStage, { detail: errorMessage, status: "failed" });
+      setPipelineError(`${failedLabel}：${errorMessage}`);
     }
   }
 
+  async function runPipeline() {
+    await executePipeline("script");
+  }
+
+  async function retryFailedPipelineStep() {
+    if (!pipelineDraft?.failedStage) {
+      return;
+    }
+
+    await executePipeline(pipelineDraft.failedStage, pipelineDraft);
+  }
+
   const isPipelineRunning = pipelineStatus === "script" || pipelineStatus === "image" || pipelineStatus === "video";
+  const failedPipelineStage = pipelineDraft?.failedStage;
+  const failedPipelineStageLabel = failedPipelineStage
+    ? pipelineStages.find((stage) => stage.id === failedPipelineStage)?.failed ?? "生成失败"
+    : null;
 
   const pipelineStatusText: Record<PipelineStatus, string> = {
     idle: "等待输入核心创意",
@@ -249,7 +393,7 @@ export function WorkflowShell() {
     image: "正在生成画面",
     video: "正在合成视频",
     done: "全链路完成",
-    error: pipelineError || "全链路生成失败",
+    error: failedPipelineStageLabel || pipelineError || "全链路生成失败",
   };
 
   const imageAssets = entries.filter((entry) => entry.result.type === "image");
@@ -405,9 +549,22 @@ export function WorkflowShell() {
               <button className="gold-button" type="button" onClick={runPipeline} disabled={isPipelineRunning}>
                 {isPipelineRunning ? "衍化中..." : "一键衍化全链路"}
               </button>
+              {failedPipelineStage ? (
+                <button className="secondary-button" type="button" onClick={retryFailedPipelineStep} disabled={isPipelineRunning}>
+                  重试失败步骤
+                </button>
+              ) : null}
               <span className={pipelineStatus === "error" ? "pipeline-status error-text" : "pipeline-status"}>
                 {pipelineStatusText[pipelineStatus]}
               </span>
+            </div>
+            <div className="pipeline-task-list" aria-label="任务状态">
+              {pipelineStages.map((stage) => (
+                <article className={`pipeline-task ${pipelineSteps[stage.id].status}`} key={stage.id}>
+                  <strong>{stage.label}</strong>
+                  <span>{pipelineSteps[stage.id].detail}</span>
+                </article>
+              ))}
             </div>
           </div>
           <ToolTabs onHistoryChange={refreshWorkflow} />

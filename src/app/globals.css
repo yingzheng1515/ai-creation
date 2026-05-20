@@ -506,6 +506,56 @@ p {
   font-size: 14px;
 }
 
+.pipeline-task-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pipeline-task {
+  display: grid;
+  gap: 5px;
+  min-height: 72px;
+  border: 1px solid var(--ink-100);
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.pipeline-task strong {
+  color: var(--ink-800);
+  font-size: 14px;
+}
+
+.pipeline-task span {
+  color: var(--ink-500);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pipeline-task.running {
+  border-color: rgba(212, 175, 55, 0.45);
+  background: var(--gold-light);
+}
+
+.pipeline-task.done {
+  border-color: rgba(40, 140, 84, 0.24);
+}
+
+.pipeline-task.done strong {
+  color: #287a4f;
+}
+
+.pipeline-task.failed {
+  border-color: rgba(227, 66, 52, 0.24);
+  background: var(--cinnabar-light);
+}
+
+.pipeline-task.failed strong,
+.pipeline-task.failed span {
+  color: var(--cinnabar);
+}
+
 .error-text {
   color: var(--cinnabar);
   font-weight: 700;
@@ -1462,6 +1512,10 @@ textarea:focus {
   .pipeline-panel {
     padding: 14px;
     border-radius: 9px;
+  }
+
+  .pipeline-task-list {
+    grid-template-columns: 1fr;
   }
 
   textarea,

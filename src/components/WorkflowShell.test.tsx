@@ -179,6 +179,140 @@ describe("WorkflowShell", () => {
     expect(screen.getByText("脚本")).toBeInTheDocument();
   });
 
+  it("shows the failed pipeline stage and retries from the failed step", async () => {
+    const script = {
+      type: "script",
+      content: "镜头从江南水面推入。",
+      scenes: [
+        {
+          id: "scene-1",
+          title: "晨雾入画",
+          shot: "镜头从江南水面推入。",
+          narration: "江南醒来。",
+          imagePrompt: "第一镜图片提示",
+          videoPrompt: "第一镜视频提示",
+          durationSeconds: 4,
+        },
+      ],
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:00.000Z",
+    };
+    const image = {
+      type: "image",
+      url: "https://example.com/scene-1.jpg",
+      prompt: "第一镜图片提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:01.000Z",
+    };
+    const video = {
+      type: "video",
+      url: "https://example.com/scene-1.mp4",
+      prompt: "第一镜视频提示",
+      provider: "mock",
+      createdAt: "2026-05-19T00:00:02.000Z",
+    };
+    let imageAttempts = 0;
+    const savedEntries: unknown[] = [];
+    const savedProjects: unknown[] = [];
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+
+      if (path === "/api/session") {
+        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123" } }) };
+      }
+
+      if (path === "/api/history" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        const saved = {
+          id: `saved-${body.type}-${body.input}`,
+          provider: body.result.provider,
+          createdAt: body.result.createdAt,
+          ...body,
+        };
+        savedEntries.unshift(saved);
+
+        return { ok: true, json: async () => saved };
+      }
+
+      if (path === "/api/history") {
+        return { ok: true, json: async () => ({ entries: savedEntries }) };
+      }
+
+      if (path === "/api/projects" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        const saved = {
+          id: "project-1",
+          createdAt: "2026-05-19T00:00:03.000Z",
+          updatedAt: "2026-05-19T00:00:03.000Z",
+          ...body,
+        };
+        savedProjects.unshift(saved);
+
+        return { ok: true, json: async () => saved };
+      }
+
+      if (path === "/api/projects") {
+        return { ok: true, json: async () => ({ projects: savedProjects }) };
+      }
+
+      if (path === "/api/generate/script") {
+        return { ok: true, json: async () => script };
+      }
+
+      if (path === "/api/generate/image") {
+        imageAttempts += 1;
+
+        if (imageAttempts === 1) {
+          return { ok: false, json: async () => ({ error: "OpenAI image timeout" }) };
+        }
+
+        return { ok: true, json: async () => image };
+      }
+
+      if (path === "/api/generate/video") {
+        return { ok: true, json: async () => video };
+      }
+
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkflowShell />);
+
+    await userEvent.type(screen.getByLabelText("核心创意"), "水墨江南宣传片");
+    await userEvent.click(screen.getByRole("button", { name: "一键衍化全链路" }));
+
+    expect(await screen.findByText("画面生成失败")).toBeInTheDocument();
+    expect(screen.getByText("OpenAI image timeout")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试失败步骤" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "重试失败步骤" }));
+
+    expect(await screen.findByText("全链路完成")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/generate/script")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/generate/image")).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/generate/video")).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/generate/script",
+      expect.objectContaining({ body: JSON.stringify({ requirement: "水墨江南宣传片" }) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/generate/image",
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜图片提示" }) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/generate/video",
+      expect.objectContaining({ body: JSON.stringify({ prompt: "第一镜视频提示" }) }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/projects",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("水墨江南宣传片"),
+      }),
+    );
+  });
+
   it("switches sidebar sections and explains token usage", async () => {
     vi.stubGlobal(
       "fetch",
