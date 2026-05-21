@@ -63,6 +63,21 @@ SEEDANCE_API_URL=你的_seedance_创建任务地址
 SEEDANCE_STATUS_API_URL=你的_seedance_查询任务地址_包含_{taskId}
 SEEDANCE_MODEL=seedance-2.0
 
+# 可选：阿里云 OSS 素材持久化。填完后，生图和生视频结果会先上传到 OSS，再保存 OSS URL。
+ALIYUN_OSS_ACCESS_KEY_ID=你的_OSS_AccessKey_ID
+ALIYUN_OSS_ACCESS_KEY_SECRET=你的_OSS_AccessKey_Secret
+ALIYUN_OSS_BUCKET=你的_bucket_名称
+ALIYUN_OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
+ALIYUN_OSS_PREFIX=ai-creation
+
+# 可选：如果绑定了 OSS 自定义域名或 CDN，就填公开访问根地址。
+# 不填时默认使用 https://<bucket>.<endpoint>/<objectKey>
+ALIYUN_OSS_PUBLIC_BASE_URL=https://你的素材域名
+
+# 可选：如果 bucket 默认不是公共读，可以显式让新上传对象公共读。
+# 需要当前 AccessKey 有 PutObjectAcl 或相关权限。
+# ALIYUN_OSS_OBJECT_ACL=public-read
+
 # 必填：用于签名登录 Cookie。请换成一串 32 位以上随机字符串。
 SESSION_SECRET=换成_32位以上_随机字符串
 
@@ -79,6 +94,10 @@ SESSION_COOKIE_SECURE=false
 `HISTORY_DATA_DIR` 用来保存“我的作品 / 素材宝库 / 历史”里的最近生成记录。MVP 阶段它会按浏览器访客会话写入 `data/users/<访客ID>/history.json`，不同访客不会共享同一份作品库。清浏览器 Cookie 或换新浏览器会生成新的访客空间。
 
 账号名 + 访问码登录会写入 `data/auth/accounts.json`。访问码不会明文保存，会使用 Node.js `scrypt` 加盐哈希。`SESSION_SECRET` 改变后，已经登录的浏览器需要重新登录。
+
+OSS 持久化是可选开关。只有 `ALIYUN_OSS_ACCESS_KEY_ID`、`ALIYUN_OSS_ACCESS_KEY_SECRET`、`ALIYUN_OSS_BUCKET`、`ALIYUN_OSS_ENDPOINT` 同时存在时才会启用；否则系统继续保存第三方生成接口返回的原始 URL。
+
+如果手机或其他电脑打不开 OSS 图片/视频，通常是 bucket 或对象没有公开读权限。先在服务器上生成一张图，再复制返回的 URL 到浏览器测试；如果返回 403，需要把 bucket 设为公共读、绑定 CDN/自定义域名，或开启 `ALIYUN_OSS_OBJECT_ACL=public-read` 并确认 AccessKey 权限。
 
 ## 4. 安装依赖并构建
 
@@ -207,7 +226,7 @@ curl -I http://127.0.0.1:3000
 检查 `.env.local` 是否在项目根目录，并重启：
 
 ```bash
-pm2 restart ai-creation
+pm2 restart ai-creation --update-env
 ```
 
 还需要确认 Seedance 的查询 URL 模板包含 `{taskId}`，例如：
@@ -215,3 +234,25 @@ pm2 restart ai-creation
 ```text
 https://example.com/video/tasks/{taskId}
 ```
+
+### OSS 没生效
+
+先确认环境变量已经被 PM2 进程读到：
+
+```bash
+pm2 restart ai-creation --update-env
+curl -sS http://127.0.0.1/api/generate/image \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"OSS 测试图片"}'
+```
+
+如果返回的 `url` 仍然不是 OSS 或 CDN 地址，检查 `.env.local` 里是否至少有这四项：
+
+```text
+ALIYUN_OSS_ACCESS_KEY_ID
+ALIYUN_OSS_ACCESS_KEY_SECRET
+ALIYUN_OSS_BUCKET
+ALIYUN_OSS_ENDPOINT
+```
+
+如果接口返回 `OSS upload failed.`，优先检查 bucket 名称、endpoint 地域、AccessKey 权限，以及服务器是否能访问 OSS endpoint。
