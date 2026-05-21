@@ -57,7 +57,7 @@ DEEPSEEK_MODEL=deepseek-chat
 
 # Google/Gemini API Key。也可以改填 GEMINI_API_KEY=你的_google_key
 GOOGLE_API_KEY=你的_google_key
-GOOGLE_IMAGE_MODEL=gemini-3.1-flash-image-preview
+GOOGLE_IMAGE_MODEL=gemini-3-pro-image-preview
 GOOGLE_VIDEO_MODEL=veo-3.1-generate-preview
 GOOGLE_VIDEO_POLL_DELAY_MS=1500
 

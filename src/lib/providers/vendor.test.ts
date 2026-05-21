@@ -79,7 +79,7 @@ describe("vendor providers", () => {
       url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
       expect.objectContaining({
         body: JSON.stringify({
           contents: [
