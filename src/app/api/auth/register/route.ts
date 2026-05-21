@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { AccountNotFoundError, AuthValidationError, InvalidAccessCodeError, loginAccount } from "@/lib/auth-store";
+import { AccountAlreadyExistsError, AuthValidationError, registerAccount } from "@/lib/auth-store";
 import { createAccountSessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isLoginBody(value: unknown): value is { accountName: string; accessCode: string } {
+function isRegisterBody(value: unknown): value is { accountName: string; accessCode: string } {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -20,12 +20,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    if (!isLoginBody(body)) {
+    if (!isRegisterBody(body)) {
       return NextResponse.json({ error: "请输入账号和访问码。" }, { status: 400 });
     }
 
-    const result = await loginAccount(body.accountName, body.accessCode);
-    const response = NextResponse.json(result);
+    const result = await registerAccount(body.accountName, body.accessCode);
+    const response = NextResponse.json(result, { status: 201 });
 
     response.headers.set("set-cookie", createAccountSessionCookie(result.user.id, request));
 
@@ -35,10 +35,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请输入 2-64 位账号名和至少 6 位访问码。" }, { status: 400 });
     }
 
-    if (error instanceof AccountNotFoundError || error instanceof InvalidAccessCodeError) {
-      return NextResponse.json({ error: "账号或访问码不正确。" }, { status: 401 });
+    if (error instanceof AccountAlreadyExistsError) {
+      return NextResponse.json({ error: "账号已存在，请直接登录。" }, { status: 409 });
     }
 
-    return NextResponse.json({ error: "登录失败。" }, { status: 500 });
+    return NextResponse.json({ error: "注册失败。" }, { status: 500 });
   }
 }

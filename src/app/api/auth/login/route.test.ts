@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "./route";
+import { registerAccount } from "@/lib/auth-store";
 
 const loginRequest = (body: unknown) =>
   new Request("http://localhost/api/auth/login", {
@@ -38,7 +39,9 @@ describe("login API route", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it("creates an account and sets a signed account session cookie", async () => {
+  it("logs in an existing account and sets a signed account session cookie", async () => {
+    await registerAccount("Ying Zheng", "open-2026");
+
     const response = await POST(loginRequest({ accountName: "Ying Zheng", accessCode: "open-2026" }));
     const payload = await response.json();
 
@@ -56,6 +59,8 @@ describe("login API route", () => {
   });
 
   it("reuses an existing account with the correct access code", async () => {
+    await registerAccount("creator", "same-code");
+
     const first = await POST(loginRequest({ accountName: "creator", accessCode: "same-code" }));
     const firstPayload = await first.json();
     const second = await POST(loginRequest({ accountName: " CREATOR ", accessCode: "same-code" }));
@@ -67,9 +72,18 @@ describe("login API route", () => {
   });
 
   it("rejects an existing account with the wrong access code", async () => {
-    await POST(loginRequest({ accountName: "creator", accessCode: "right-code" }));
+    await registerAccount("creator", "right-code");
 
     const response = await POST(loginRequest({ accountName: "creator", accessCode: "wrong-code" }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.error).toBe("账号或访问码不正确。");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("rejects a missing account instead of creating it", async () => {
+    const response = await POST(loginRequest({ accountName: "new-account", accessCode: "open-2026" }));
     const payload = await response.json();
 
     expect(response.status).toBe(401);

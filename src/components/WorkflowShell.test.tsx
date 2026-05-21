@@ -418,7 +418,7 @@ describe("WorkflowShell", () => {
 
     await userEvent.type(screen.getByLabelText("账号名"), "Creator");
     await userEvent.type(screen.getByLabelText("访问码"), "open-2026");
-    await userEvent.click(screen.getByRole("button", { name: "登录 / 创建账号" }));
+    await userEvent.click(screen.getByRole("button", { name: "登录账号" }));
 
     expect(await screen.findByText("Creator")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -433,6 +433,55 @@ describe("WorkflowShell", () => {
 
     expect(await screen.findByText("访客 ext123")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("registers a new account from the sidebar account panel", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+
+      if (path === "/api/session") {
+        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123", isAuthenticated: false } }) };
+      }
+
+      if (path === "/api/auth/register" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            user: {
+              id: "acct_new123",
+              label: "New Creator",
+              accountName: "new creator",
+              isAuthenticated: true,
+            },
+          }),
+        };
+      }
+
+      if (path === "/api/history" || path === "/api/projects") {
+        return { ok: false, json: async () => ({ error: "请先登录后再继续。" }) };
+      }
+
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkflowShell />);
+
+    expect(await screen.findByText("访客 est123")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "注册" }));
+    await userEvent.type(screen.getByLabelText("账号名"), "New Creator");
+    await userEvent.type(screen.getByLabelText("访问码"), "open-2026");
+    await userEvent.click(screen.getByRole("button", { name: "注册并进入" }));
+
+    expect(await screen.findByText("New Creator")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/register",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ accountName: "New Creator", accessCode: "open-2026" }),
+      }),
+    );
   });
 
   it("renders when server history contains obsolete entries", async () => {

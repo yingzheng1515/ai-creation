@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { addHistoryEntry, getHistory } from "@/lib/history";
 import { addProject, getProjects } from "@/lib/projects";
-import { getSession, login, logout } from "@/lib/session-client";
+import { getSession, login, logout, register } from "@/lib/session-client";
 import type { ClientSession } from "@/lib/session-client";
 import type {
   GenerationResult,
@@ -22,6 +22,7 @@ type PipelineStatus = "idle" | "script" | "image" | "video" | "done" | "error";
 type PipelineStage = "script" | "image" | "video";
 type PipelineStepStatus = "pending" | "running" | "done" | "failed";
 type WorkspaceView = "studio" | "works" | "assets" | "templates";
+type AuthMode = "login" | "register";
 
 type PipelineStep = {
   detail: string;
@@ -124,6 +125,7 @@ export function WorkflowShell() {
   const [session, setSession] = useState<ClientSession>({ id: "unknown", label: "访客空间", isAuthenticated: false });
   const [accountName, setAccountName] = useState("");
   const [accessCode, setAccessCode] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authError, setAuthError] = useState("");
   const [isAuthBusy, setIsAuthBusy] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>("studio");
@@ -182,13 +184,15 @@ export function WorkflowShell() {
   const refreshWorkflow = () => setHistoryVersion((version) => version + 1);
   const refreshProjects = () => setProjectVersion((version) => version + 1);
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAuthError("");
     setIsAuthBusy(true);
 
     try {
-      const nextSession = await login(accountName, accessCode);
+      const nextSession = authMode === "register"
+        ? await register(accountName, accessCode)
+        : await login(accountName, accessCode);
       setSession(nextSession);
       setAccessCode("");
       refreshWorkflow();
@@ -651,7 +655,29 @@ export function WorkflowShell() {
               退出登录
             </button>
           ) : (
-            <form className="account-form" onSubmit={handleLogin}>
+            <form className="account-form" onSubmit={handleAuthSubmit}>
+              <div className="account-mode-switch" aria-label="账号操作">
+                <button
+                  className={authMode === "login" ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError("");
+                  }}
+                >
+                  登录
+                </button>
+                <button
+                  className={authMode === "register" ? "active" : ""}
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("register");
+                    setAuthError("");
+                  }}
+                >
+                  注册
+                </button>
+              </div>
               <label>
                 <span>账号名</span>
                 <input
@@ -668,12 +694,12 @@ export function WorkflowShell() {
                   onChange={(event) => setAccessCode(event.target.value)}
                   placeholder="至少 6 位"
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={authMode === "register" ? "new-password" : "current-password"}
                 />
               </label>
               {authError ? <p className="auth-error">{authError}</p> : null}
               <button className="secondary-button account-action" type="submit" disabled={isAuthBusy}>
-                {isAuthBusy ? "处理中..." : "登录 / 创建账号"}
+                {isAuthBusy ? "处理中..." : authMode === "register" ? "注册并进入" : "登录账号"}
               </button>
             </form>
           )}

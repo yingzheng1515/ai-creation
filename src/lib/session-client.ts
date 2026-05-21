@@ -54,6 +54,21 @@ export async function login(accountName: string, accessCode: string): Promise<Cl
   return parseSessionPayload(payload);
 }
 
+export async function register(accountName: string, accessCode: string): Promise<ClientSession> {
+  const response = await fetch("/api/auth/register", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ accountName, accessCode }),
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(isRecord(payload) && typeof payload.error === "string" ? payload.error : "注册失败。");
+  }
+
+  return parseSessionPayload(payload);
+}
+
 export async function logout(): Promise<ClientSession> {
   const response = await fetch("/api/auth/logout", { method: "POST" });
   const payload = await response.json();

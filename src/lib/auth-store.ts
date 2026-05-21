@@ -30,6 +30,8 @@ export type AccountLoginResult = {
 
 export class AuthValidationError extends Error {}
 export class InvalidAccessCodeError extends Error {}
+export class AccountAlreadyExistsError extends Error {}
+export class AccountNotFoundError extends Error {}
 
 function dataBaseDir() {
   if (process.env.HISTORY_DATA_DIR) {
@@ -130,6 +132,53 @@ function toUser(account: AccountRecord): AuthenticatedUser {
   };
 }
 
+async function createAccountRecord(normalized: string, displayName: string, accessCode: string): Promise<AccountRecord> {
+  const salt = randomBytes(16).toString("hex");
+  const now = new Date().toISOString();
+
+  return {
+    id: accountIdForName(normalized),
+    accountName: normalized,
+    displayName,
+    salt,
+    accessCodeHash: await hashAccessCode(accessCode, salt),
+    createdAt: now,
+  };
+}
+
+export async function registerAccount(accountName: string, accessCode: string): Promise<AccountLoginResult> {
+  const normalized = validateCredentials(accountName, accessCode);
+  const displayName = accountName.trim().replace(/\s+/g, " ");
+  const accounts = await readAccounts();
+  const existing = accounts.find((account) => account.accountName === normalized);
+
+  if (existing) {
+    throw new AccountAlreadyExistsError("Account already exists.");
+  }
+
+  const account = await createAccountRecord(normalized, displayName, accessCode);
+
+  await writeAccounts([...accounts, account]);
+
+  return { user: toUser(account), isNew: true };
+}
+
+export async function loginAccount(accountName: string, accessCode: string): Promise<AccountLoginResult> {
+  const normalized = validateCredentials(accountName, accessCode);
+  const accounts = await readAccounts();
+  const existing = accounts.find((account) => account.accountName === normalized);
+
+  if (!existing) {
+    throw new AccountNotFoundError("Account not found.");
+  }
+
+  if (!(await verifyAccessCode(accessCode, existing))) {
+    throw new InvalidAccessCodeError("Invalid access code.");
+  }
+
+  return { user: toUser(existing), isNew: false };
+}
+
 export async function createOrLoginAccount(accountName: string, accessCode: string): Promise<AccountLoginResult> {
   const normalized = validateCredentials(accountName, accessCode);
   const displayName = accountName.trim().replace(/\s+/g, " ");
@@ -144,16 +193,7 @@ export async function createOrLoginAccount(accountName: string, accessCode: stri
     return { user: toUser(existing), isNew: false };
   }
 
-  const salt = randomBytes(16).toString("hex");
-  const now = new Date().toISOString();
-  const account: AccountRecord = {
-    id: accountIdForName(normalized),
-    accountName: normalized,
-    displayName,
-    salt,
-    accessCodeHash: await hashAccessCode(accessCode, salt),
-    createdAt: now,
-  };
+  const account = await createAccountRecord(normalized, displayName, accessCode);
 
   await writeAccounts([...accounts, account]);
 
