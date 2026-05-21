@@ -21,13 +21,19 @@ describe("provider resolver", () => {
     expect(providers.mode).toBe("external");
   });
 
-  it("uses vendor providers when DeepSeek, OpenAI, and Seedance are configured", () => {
+  it("uses vendor providers when DeepSeek and Google are configured", () => {
     const providers = getProviders({
       DEEPSEEK_API_KEY: "deepseek-key",
-      OPENAI_API_KEY: "openai-key",
-      SEEDANCE_API_KEY: "seedance-key",
-      SEEDANCE_API_URL: "https://ark.example.com/video/tasks",
-      SEEDANCE_STATUS_API_URL: "https://ark.example.com/video/tasks/{taskId}",
+      GOOGLE_API_KEY: "google-key",
+    });
+
+    expect(providers.mode).toBe("external");
+  });
+
+  it("accepts GEMINI_API_KEY as the Google API key alias", () => {
+    const providers = getProviders({
+      DEEPSEEK_API_KEY: "deepseek-key",
+      GEMINI_API_KEY: "gemini-key",
     });
 
     expect(providers.mode).toBe("external");
@@ -41,8 +47,7 @@ describe("provider resolver", () => {
 
   it("rejects partial vendor configuration", () => {
     expect(() => getProviders({
-      DEEPSEEK_API_KEY: "deepseek-key",
-      OPENAI_API_KEY: "openai-key",
-    })).toThrow("Configure DeepSeek, OpenAI, and Seedance together, or leave all vendor variables empty.");
+      GOOGLE_API_KEY: "google-key",
+    })).toThrow("Configure DeepSeek and Google together, or leave all vendor variables empty.");
   });
 });

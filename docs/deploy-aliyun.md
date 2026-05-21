@@ -49,19 +49,25 @@ git checkout codex/ai-creation-mvp
 nano .env.local
 ```
 
-填入真实密钥和 Seedance 地址：
+填入真实密钥。当前推荐组合是 DeepSeek 写脚本，Google/Gemini 负责生图和生视频：
 
 ```bash
 DEEPSEEK_API_KEY=你的_deepseek_key
 DEEPSEEK_MODEL=deepseek-chat
 
-OPENAI_API_KEY=你的_openai_key
-OPENAI_IMAGE_MODEL=gpt-image-2
+# Google/Gemini API Key。也可以改填 GEMINI_API_KEY=你的_google_key
+GOOGLE_API_KEY=你的_google_key
+GOOGLE_IMAGE_MODEL=gemini-3.1-flash-image-preview
+GOOGLE_VIDEO_MODEL=veo-3.1-generate-preview
+GOOGLE_VIDEO_POLL_DELAY_MS=1500
 
-SEEDANCE_API_KEY=你的_seedance_key
-SEEDANCE_API_URL=你的_seedance_创建任务地址
-SEEDANCE_STATUS_API_URL=你的_seedance_查询任务地址_包含_{taskId}
-SEEDANCE_MODEL=seedance-2.0
+# 旧配置保留兼容，不建议新部署继续使用：
+# OPENAI_API_KEY=
+# OPENAI_IMAGE_MODEL=gpt-image-2
+# SEEDANCE_API_KEY=
+# SEEDANCE_API_URL=
+# SEEDANCE_STATUS_API_URL=
+# SEEDANCE_MODEL=seedance-2.0
 
 # 可选：阿里云 OSS 素材持久化。填完后，生图和生视频结果会先上传到 OSS，再保存 OSS URL。
 ALIYUN_OSS_ACCESS_KEY_ID=你的_OSS_AccessKey_ID
@@ -229,11 +235,14 @@ curl -I http://127.0.0.1:3000
 pm2 restart ai-creation --update-env
 ```
 
-还需要确认 Seedance 的查询 URL 模板包含 `{taskId}`，例如：
+确认已经同时配置：
 
 ```text
-https://example.com/video/tasks/{taskId}
+DEEPSEEK_API_KEY
+GOOGLE_API_KEY 或 GEMINI_API_KEY
 ```
+
+如果仍然回退到 mock provider，通常是 PM2 没读到最新 `.env.local`，执行 `pm2 restart ai-creation --update-env` 后再测。
 
 ### OSS 没生效
 

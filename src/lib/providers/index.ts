@@ -1,7 +1,13 @@
 import { createExternalImageProvider, createExternalScriptProvider, createExternalVideoProvider } from "./external";
 import { mockImageProvider, mockScriptProvider, mockVideoProvider } from "./mock";
 import type { ImageProvider, ScriptProvider, VideoProvider } from "./types";
-import { createDeepSeekScriptProvider, createOpenAIImageProvider, createSeedanceVideoProvider } from "./vendor";
+import {
+  createDeepSeekScriptProvider,
+  createGoogleImageProvider,
+  createGoogleVideoProvider,
+  createOpenAIImageProvider,
+  createSeedanceVideoProvider,
+} from "./vendor";
 
 type ProviderEnv = Record<string, string | undefined> & {
   AI_IMAGE_API_KEY?: string;
@@ -12,6 +18,11 @@ type ProviderEnv = Record<string, string | undefined> & {
   AI_VIDEO_API_URL?: string;
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  GOOGLE_IMAGE_MODEL?: string;
+  GOOGLE_VIDEO_MODEL?: string;
+  GOOGLE_VIDEO_POLL_DELAY_MS?: string;
   OPENAI_API_KEY?: string;
   OPENAI_IMAGE_MODEL?: string;
   SEEDANCE_API_KEY?: string;
@@ -31,8 +42,53 @@ function hasValue(value: string | undefined): boolean {
   return Boolean(value?.trim());
 }
 
+function optionalNumber(value: string | undefined): number | undefined {
+  if (!hasValue(value)) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
 export function getProviders(env: ProviderEnv = process.env): ProviderBundle {
-  const configuredVendorValues = [
+  const googleApiKey = hasValue(env.GOOGLE_API_KEY) ? env.GOOGLE_API_KEY : env.GEMINI_API_KEY;
+  const hasGoogleVendorConfig = [
+    googleApiKey,
+    env.GOOGLE_IMAGE_MODEL,
+    env.GOOGLE_VIDEO_MODEL,
+    env.GOOGLE_VIDEO_POLL_DELAY_MS,
+  ].some(hasValue);
+
+  if (hasGoogleVendorConfig) {
+    const configuredGoogleVendorValues = [
+      env.DEEPSEEK_API_KEY,
+      googleApiKey,
+    ].filter(hasValue).length;
+
+    if (configuredGoogleVendorValues !== 2) {
+      throw new Error("Configure DeepSeek and Google together, or leave all vendor variables empty.");
+    }
+
+    return {
+      image: createGoogleImageProvider({
+        apiKey: googleApiKey as string,
+        model: env.GOOGLE_IMAGE_MODEL,
+      }),
+      mode: "external",
+      script: createDeepSeekScriptProvider({
+        apiKey: env.DEEPSEEK_API_KEY as string,
+        model: env.DEEPSEEK_MODEL,
+      }),
+      video: createGoogleVideoProvider({
+        apiKey: googleApiKey as string,
+        model: env.GOOGLE_VIDEO_MODEL,
+        pollDelayMs: optionalNumber(env.GOOGLE_VIDEO_POLL_DELAY_MS),
+      }),
+    };
+  }
+
+  const configuredLegacyVendorValues = [
     env.DEEPSEEK_API_KEY,
     env.OPENAI_API_KEY,
     env.SEEDANCE_API_KEY,
@@ -40,11 +96,11 @@ export function getProviders(env: ProviderEnv = process.env): ProviderBundle {
     env.SEEDANCE_STATUS_API_URL,
   ].filter(hasValue).length;
 
-  if (configuredVendorValues > 0 && configuredVendorValues !== 5) {
+  if (configuredLegacyVendorValues > 0 && configuredLegacyVendorValues !== 5) {
     throw new Error("Configure DeepSeek, OpenAI, and Seedance together, or leave all vendor variables empty.");
   }
 
-  if (configuredVendorValues === 5) {
+  if (configuredLegacyVendorValues === 5) {
     return {
       image: createOpenAIImageProvider({
         apiKey: env.OPENAI_API_KEY as string,

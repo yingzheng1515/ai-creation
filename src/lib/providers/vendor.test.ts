@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDeepSeekScriptProvider, createOpenAIImageProvider, createSeedanceVideoProvider } from "./vendor";
+import { createDeepSeekScriptProvider, createGoogleImageProvider, createGoogleVideoProvider } from "./vendor";
 
 describe("vendor providers", () => {
   it("generates structured script scenes through DeepSeek chat completions", async () => {
@@ -48,12 +48,25 @@ describe("vendor providers", () => {
     );
   });
 
-  it("generates an image through OpenAI image generations", async () => {
+  it("generates an image through Google Gemini image generation", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      data: [{ b64_json: "aW1hZ2UtYnl0ZXM=" }],
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "image/png",
+                  data: "aW1hZ2UtYnl0ZXM=",
+                },
+              },
+            ],
+          },
+        },
+      ],
     })));
-    const provider = createOpenAIImageProvider({
-      apiKey: "openai-key",
+    const provider = createGoogleImageProvider({
+      apiKey: "google-key",
       fetchImpl: fetchMock,
     });
 
@@ -66,29 +79,49 @@ describe("vendor providers", () => {
       url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=",
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.openai.com/v1/images/generations",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent",
       expect.objectContaining({
-        body: JSON.stringify({ model: "gpt-image-2", prompt: "水墨江南图片" }),
-        headers: expect.objectContaining({ authorization: "Bearer openai-key" }),
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: "水墨江南图片" }],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ["TEXT", "IMAGE"],
+          },
+        }),
+        headers: expect.objectContaining({ "x-goog-api-key": "google-key" }),
         method: "POST",
       }),
     );
   });
 
-  it("submits and polls a Seedance 2.0 video generation task", async () => {
+  it("submits and polls a Google Veo video generation task", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "task-1" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ name: "operations/video-1" })))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        status: "succeeded",
-        content: { video_url: "https://cdn.example.com/seedance.mp4" },
-      })));
-    const provider = createSeedanceVideoProvider({
-      apiKey: "seedance-key",
-      createUrl: "https://ark.example.com/video/tasks",
+        done: true,
+        response: {
+          generateVideoResponse: {
+            generatedSamples: [
+              {
+                video: {
+                  uri: "https://cdn.example.com/google-video.mp4",
+                },
+              },
+            ],
+          },
+        },
+      })))
+      .mockResolvedValueOnce(new Response("video-bytes", {
+        headers: { "content-type": "video/mp4" },
+      }));
+    const provider = createGoogleVideoProvider({
+      apiKey: "google-key",
       fetchImpl: fetchMock,
       pollDelayMs: 0,
-      statusUrlTemplate: "https://ark.example.com/video/tasks/{taskId}",
     });
 
     const result = await provider.generateVideo({ prompt: "水墨江南视频" });
@@ -97,21 +130,32 @@ describe("vendor providers", () => {
       type: "video",
       prompt: "水墨江南视频",
       provider: "external",
-      url: "https://cdn.example.com/seedance.mp4",
+      url: "data:video/mp4;base64,dmlkZW8tYnl0ZXM=",
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://ark.example.com/video/tasks",
+      "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
       expect.objectContaining({
-        body: JSON.stringify({ model: "seedance-2.0", prompt: "水墨江南视频" }),
-        headers: expect.objectContaining({ authorization: "Bearer seedance-key" }),
+        body: JSON.stringify({ instances: [{ prompt: "水墨江南视频" }] }),
+        headers: expect.objectContaining({ "x-goog-api-key": "google-key" }),
         method: "POST",
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://ark.example.com/video/tasks/task-1",
-      expect.objectContaining({ method: "GET" }),
+      "https://generativelanguage.googleapis.com/v1beta/operations/video-1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-goog-api-key": "google-key" }),
+        method: "GET",
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://cdn.example.com/google-video.mp4",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-goog-api-key": "google-key" }),
+        method: "GET",
+      }),
     );
   });
 });
