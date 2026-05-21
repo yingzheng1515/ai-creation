@@ -66,6 +66,7 @@ const pipelineStages: Array<{ failed: string; id: PipelineStage; label: string; 
   { id: "image", label: "画面生成", running: "正在生成画面", failed: "画面生成失败" },
   { id: "video", label: "视频合成", running: "正在合成视频", failed: "视频合成失败" },
 ];
+const authRequiredMessage = "请先登录或创建账号后再继续。";
 
 function initialPipelineSteps(): PipelineSteps {
   return {
@@ -275,6 +276,16 @@ export function WorkflowShell() {
   }
 
   async function executePipeline(startStage: PipelineStage, existingDraft?: PipelineDraft) {
+    if (!session.isAuthenticated) {
+      setPipelineStatus("error");
+      setPipelineError(authRequiredMessage);
+      setPipelineSteps({
+        ...initialPipelineSteps(),
+        script: { detail: authRequiredMessage, status: "failed" },
+      });
+      return;
+    }
+
     const prompt = (existingDraft?.prompt ?? pipelinePrompt).trim();
     if (!prompt) {
       setPipelineStatus("error");
@@ -451,7 +462,9 @@ export function WorkflowShell() {
             <p>这里汇总一键生成的完整项目，换设备也能继续查看。</p>
           </div>
           {projects.length === 0 ? (
-            <div className="result-empty">还没有项目。先回到创作台完成一次全链路生成。</div>
+            <div className="result-empty">
+              {session.isAuthenticated ? "还没有项目。先回到创作台完成一次全链路生成。" : "登录后可以查看和保存你的作品。"}
+            </div>
           ) : (
             <div className="library-list">
               {projects.map((project) => (
@@ -482,7 +495,9 @@ export function WorkflowShell() {
             <p>图片和视频素材会在生成后自动沉淀到这里。</p>
           </div>
           {imageAssets.length + videoAssets.length === 0 ? (
-            <div className="result-empty">还没有素材。生成图片或视频后会显示在这里。</div>
+            <div className="result-empty">
+              {session.isAuthenticated ? "还没有素材。生成图片或视频后会显示在这里。" : "登录后可以查看生成的图片和视频素材。"}
+            </div>
           ) : (
             <div className="asset-grid">
               {[...imageAssets, ...videoAssets].map((entry) => (
@@ -558,6 +573,7 @@ export function WorkflowShell() {
                 {pipelineStatusText[pipelineStatus]}
               </span>
             </div>
+            {!session.isAuthenticated ? <p className="auth-required-note">{authRequiredMessage}</p> : null}
             <div className="pipeline-task-list" aria-label="任务状态">
               {pipelineStages.map((stage) => (
                 <article className={`pipeline-task ${pipelineSteps[stage.id].status}`} key={stage.id}>

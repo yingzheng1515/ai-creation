@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 
 export const SESSION_COOKIE_NAME = "ai_creation_session";
+export const AUTH_REQUIRED_MESSAGE = "请先登录后再继续。";
 
 export type VisitorSession = {
   userId: string;
@@ -177,4 +178,8 @@ export function applySessionCookie(response: Response, session: VisitorSession) 
   }
 
   return response;
+}
+
+export function isAuthenticatedSession(session: VisitorSession) {
+  return session.isAuthenticated;
 }

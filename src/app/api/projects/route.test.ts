@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET, POST } from "./route";
+import { AUTH_REQUIRED_MESSAGE, createAccountSessionCookie } from "@/lib/session";
 import type { NewCreationProject } from "@/types/projects";
 
 const script = {
@@ -43,14 +44,17 @@ const project: NewCreationProject = {
   ],
 };
 
-const postRequest = (body: unknown, cookie = "ai_creation_session=usr_projects") =>
+const authCookie = (userId = "acct_1234567890abcdef12345678") =>
+  createAccountSessionCookie(userId, new Request("http://localhost/api/projects"));
+
+const postRequest = (body: unknown, cookie = authCookie()) =>
   new Request("http://localhost/api/projects", {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
   });
 
-const getRequest = (cookie = "ai_creation_session=usr_projects") =>
+const getRequest = (cookie = authCookie()) =>
   new Request("http://localhost/api/projects", {
     headers: { cookie },
   });
@@ -95,6 +99,14 @@ describe("projects API route", () => {
 
     expect(listResponse.status).toBe(200);
     expect(listed.projects).toEqual([saved]);
+  });
+
+  it("rejects visitor project access", async () => {
+    const response = await GET(getRequest("ai_creation_session=usr_projects"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.error).toBe(AUTH_REQUIRED_MESSAGE);
   });
 
   it("rejects malformed projects", async () => {

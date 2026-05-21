@@ -296,6 +296,13 @@ p {
   line-height: 1.5;
 }
 
+.auth-required-note {
+  margin: 8px 0 0;
+  color: var(--cinnabar);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .main-stage {
   position: relative;
   display: flex;

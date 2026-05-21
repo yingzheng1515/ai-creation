@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE, GET, POST } from "./route";
 import { createOrLoginAccount } from "@/lib/auth-store";
-import { createAccountSessionCookie } from "@/lib/session";
+import { AUTH_REQUIRED_MESSAGE, createAccountSessionCookie } from "@/lib/session";
 import type { ScriptResult } from "@/types/generation";
 
 const scriptResult: ScriptResult = {
@@ -14,19 +14,22 @@ const scriptResult: ScriptResult = {
   createdAt: "2026-05-19T00:00:00.000Z",
 };
 
-const jsonRequest = (body: unknown, cookie = "ai_creation_session=usr_default123") =>
+const authCookie = (userId = "acct_1234567890abcdef12345678") =>
+  createAccountSessionCookie(userId, new Request("http://localhost/api/history"));
+
+const jsonRequest = (body: unknown, cookie = authCookie()) =>
   new Request("http://localhost/api/history", {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify(body),
   });
 
-const getRequest = (cookie = "ai_creation_session=usr_default123") =>
+const getRequest = (cookie = authCookie()) =>
   new Request("http://localhost/api/history", {
     headers: { cookie },
   });
 
-const deleteRequest = (cookie = "ai_creation_session=usr_default123") =>
+const deleteRequest = (cookie = authCookie()) =>
   new Request("http://localhost/api/history", {
     method: "DELETE",
     headers: { cookie },
@@ -81,15 +84,17 @@ describe("history API route", () => {
     expect(listed.entries).toEqual([saved]);
   });
 
-  it("keeps generated history isolated by visitor session", async () => {
+  it("keeps generated history isolated by account session", async () => {
+    const accountOneCookie = authCookie("acct_111111111111111111111111");
+    const accountTwoCookie = authCookie("acct_222222222222222222222222");
     const userOneRequest = new Request("http://localhost/api/history", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: "ai_creation_session=usr_one123" },
+      headers: { "content-type": "application/json", cookie: accountOneCookie },
       body: JSON.stringify({ type: "script", input: "用户一", result: scriptResult }),
     });
     const userTwoRequest = new Request("http://localhost/api/history", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: "ai_creation_session=usr_two123" },
+      headers: { "content-type": "application/json", cookie: accountTwoCookie },
       body: JSON.stringify({ type: "script", input: "用户二", result: scriptResult }),
     });
 
@@ -98,12 +103,12 @@ describe("history API route", () => {
 
     const userOneResponse = await GET(
       new Request("http://localhost/api/history", {
-        headers: { cookie: "ai_creation_session=usr_one123" },
+        headers: { cookie: accountOneCookie },
       }),
     );
     const userTwoResponse = await GET(
       new Request("http://localhost/api/history", {
-        headers: { cookie: "ai_creation_session=usr_two123" },
+        headers: { cookie: accountTwoCookie },
       }),
     );
 
@@ -136,11 +141,30 @@ describe("history API route", () => {
       }),
     );
     const visitorResponse = await GET(getRequest("ai_creation_session=usr_visitor123"));
+    const visitorPayload = await visitorResponse.json();
 
     expect((await accountResponse.json()).entries).toEqual([
       expect.objectContaining({ input: "账号作品" }),
     ]);
-    expect((await visitorResponse.json()).entries).toEqual([]);
+    expect(visitorResponse.status).toBe(401);
+    expect(visitorPayload.error).toBe(AUTH_REQUIRED_MESSAGE);
+  });
+
+  it("rejects visitor history writes", async () => {
+    const response = await POST(
+      jsonRequest(
+        {
+          type: "script",
+          input: "访客作品",
+          result: scriptResult,
+        },
+        "ai_creation_session=usr_visitor123",
+      ),
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.error).toBe(AUTH_REQUIRED_MESSAGE);
   });
 
   it("rejects malformed history entries", async () => {

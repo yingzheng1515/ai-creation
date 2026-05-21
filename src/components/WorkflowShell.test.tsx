@@ -109,7 +109,7 @@ describe("WorkflowShell", () => {
       }
 
       if (path === "/api/session") {
-        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123" } }) };
+        return { ok: true, json: async () => ({ user: { id: "acct_test123", label: "Creator", isAuthenticated: true } }) };
       }
 
       if (path === "/api/generate/script") {
@@ -131,6 +131,8 @@ describe("WorkflowShell", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<WorkflowShell />);
+
+    expect(await screen.findByText("Creator")).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("核心创意"), "水墨江南宣传片");
     await userEvent.click(screen.getByRole("button", { name: "一键衍化全链路" }));
@@ -218,7 +220,7 @@ describe("WorkflowShell", () => {
       const path = String(url);
 
       if (path === "/api/session") {
-        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123" } }) };
+        return { ok: true, json: async () => ({ user: { id: "acct_test123", label: "Creator", isAuthenticated: true } }) };
       }
 
       if (path === "/api/history" && init?.method === "POST") {
@@ -278,6 +280,8 @@ describe("WorkflowShell", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<WorkflowShell />);
+
+    expect(await screen.findByText("Creator")).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("核心创意"), "水墨江南宣传片");
     await userEvent.click(screen.getByRole("button", { name: "一键衍化全链路" }));
@@ -345,6 +349,33 @@ describe("WorkflowShell", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /灵力 Token/ }));
     expect(screen.getByText("Token 是生成脚本、图片和视频时预估消耗的额度。")).toBeInTheDocument();
+  });
+
+  it("asks visitors to log in before running the pipeline", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const path = String(url);
+
+      if (path === "/api/session") {
+        return { ok: true, json: async () => ({ user: { id: "usr_test123", label: "访客 est123", isAuthenticated: false } }) };
+      }
+
+      if (path === "/api/history" || path === "/api/projects") {
+        return { ok: false, json: async () => ({ error: "请先登录后再继续。" }) };
+      }
+
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<WorkflowShell />);
+
+    expect(await screen.findByText("访客 est123")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("核心创意"), "水墨江南宣传片");
+    await userEvent.click(screen.getByRole("button", { name: "一键衍化全链路" }));
+
+    expect(screen.getAllByText("请先登录或创建账号后再继续。").length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/generate/script")).toBe(false);
   });
 
   it("logs in and logs out from the sidebar account panel", async () => {

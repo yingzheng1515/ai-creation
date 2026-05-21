@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as postImage } from "./image/route";
 import { POST as postScript } from "./script/route";
 import { POST as postVideo } from "./video/route";
+import { AUTH_REQUIRED_MESSAGE, createAccountSessionCookie } from "@/lib/session";
 
-const request = (body: unknown) =>
+const authCookie = () =>
+  createAccountSessionCookie("acct_1234567890abcdef12345678", new Request("http://localhost/api/generate/test"));
+
+const request = (body: unknown, cookie = authCookie()) =>
   new Request("http://localhost/api/generate/test", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", cookie },
   });
 
 describe("generation API routes", () => {
@@ -18,9 +22,11 @@ describe("generation API routes", () => {
     ALIYUN_OSS_ENDPOINT: process.env.ALIYUN_OSS_ENDPOINT,
     ALIYUN_OSS_PREFIX: process.env.ALIYUN_OSS_PREFIX,
     ALIYUN_OSS_PUBLIC_BASE_URL: process.env.ALIYUN_OSS_PUBLIC_BASE_URL,
+    SESSION_SECRET: process.env.SESSION_SECRET,
   };
 
   beforeEach(() => {
+    process.env.SESSION_SECRET = "test-session-secret";
     delete process.env.ALIYUN_OSS_ACCESS_KEY_ID;
     delete process.env.ALIYUN_OSS_ACCESS_KEY_SECRET;
     delete process.env.ALIYUN_OSS_BUCKET;
@@ -39,6 +45,14 @@ describe("generation API routes", () => {
         process.env[key as keyof typeof originalEnv] = value;
       }
     }
+  });
+
+  it("requires an authenticated account session", async () => {
+    const response = await postScript(request({ requirement: "餐饮店开业宣传" }, ""));
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json.error).toBe(AUTH_REQUIRED_MESSAGE);
   });
 
   it("returns script results", async () => {

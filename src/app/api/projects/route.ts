@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { isNewCreationProject } from "@/lib/project-schema";
 import { addProjectToStore, listProjects } from "@/lib/project-store";
-import { applySessionCookie, getVisitorSession } from "@/lib/session";
+import { applySessionCookie, AUTH_REQUIRED_MESSAGE, getVisitorSession, isAuthenticatedSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const session = getVisitorSession(request);
+  if (!isAuthenticatedSession(session)) {
+    return applySessionCookie(NextResponse.json({ error: AUTH_REQUIRED_MESSAGE }, { status: 401 }), session);
+  }
+
   const projects = await listProjects(session.userId);
 
   return applySessionCookie(NextResponse.json({ projects }), session);
@@ -15,6 +19,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = getVisitorSession(request);
+  if (!isAuthenticatedSession(session)) {
+    return applySessionCookie(NextResponse.json({ error: AUTH_REQUIRED_MESSAGE }, { status: 401 }), session);
+  }
 
   try {
     const body = await request.json();
